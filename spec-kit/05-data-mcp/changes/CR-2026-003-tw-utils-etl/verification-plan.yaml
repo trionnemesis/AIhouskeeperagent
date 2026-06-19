@@ -1,0 +1,36 @@
+# Verification Plan — CR:2026:003 tw-utils ETL（GATE:VDD）
+quality_profile:
+  id: "QP:ETL:BATCH"
+  note: "ETL 為背景批次，非互動 hot-path；無 p95 互動門檻。重正確性與冪等。"
+  idempotency: "同一 raw 輸入 → 同一 normalized 輸出（deterministic transform）"
+
+gate_vdd:
+  binds_to: "GATE:VDD"
+  trigger: { when: "post-Green AND pre-Deploy" }
+  preconditions:
+    - functional_tests: passing       # etl-transform/etl-run + 既有 18 回歸
+    - red_evidence: present
+    - quality_profile: resolved
+  assertions:
+    correctness:
+      - check: transform_deterministic           # 同輸入同輸出
+        oracle: "unit-test(sample raw → expected normalized)"
+      - check: runner_uses_injected_fetcher       # DI；不在測試中真實下載
+        oracle: "test with fake fetcher"
+      - check: regression_existing_green          # 既有 18 測試不退化
+        oracle: "node --test（全套件）"
+      - check: license_attribution_present        # DI-2/DI-8：data 標來源/license
+        oracle: "assert(data manifest has source + license)"
+    mutation:
+      - metric: mutation_score
+        condition: ">= M_threshold"   # transform 解析邏輯需高殺變異
+  oracle:
+    correctness: "deterministic unit asserts"
+    mutation: "manual mutation (cp backup + diff confirm，避 perl 假陰性)"
+  on_fail: { policy: "reject | repair", forbidden: implementer_agent_lowers_threshold }
+  evidence_required:
+    - transform_unit_report
+    - runner_di_test
+    - full_suite_regression_report
+    - mutation_kill_log
+  final_authority: production_telemetry   # ETL 排程成功率/資料新鮮度

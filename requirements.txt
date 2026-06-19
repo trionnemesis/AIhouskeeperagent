@@ -1,0 +1,5 @@
+# Python MCP servers（packages/mcp-lvr, packages/mcp-public-safety）runtime 依賴。
+# 安裝：python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
+# 純領域/防護邏輯與 ETL parser 用 stdlib（unittest 可零依賴執行）；
+# 僅 server.py 起服務 + GATE:DEPLOY smoke 需 fastmcp。
+fastmcp>=3.4

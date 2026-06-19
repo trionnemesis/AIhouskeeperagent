@@ -13,6 +13,8 @@
 | [`amenities-geocoding.feature`](amenities-geocoding.feature) | amenities-mcp (P1) | DI-6/7/8/2, REL-4 |
 | [`company-resolve.feature`](company-resolve.feature) | company-registry (P2 部分) | DI-1/8 |
 | [`public-safety.feature`](public-safety.feature) | public-safety (P2) | **DI-5**(粒度封頂), DI-2/3/7/8, Inv-4/5, REL-4 |
+| [`gateway-router.feature`](gateway-router.feature) | Gateway Router (CR-2026-002) | DI-4(禁降黑名單)/DI-8, REL-4, 斷路器 |
+| [`gateway-rag.feature`](gateway-rag.feature) | Gateway RAG Adapter (CR-2026-002) | **Inv-1/Inv-7**(越界防線 H1), DI-1/6/7 |
 
 > `public-safety.feature` 依 STDD×VDD 產出：每場景須先過 **GATE:RED**（baseline 失敗 + Red Evidence），斷言業務結果（非僅 status），含 DI-5 負向場景；Change Package 見 [`../changes/CR-2026-001-public-safety/`](../changes/CR-2026-001-public-safety/)。
 

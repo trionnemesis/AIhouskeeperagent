@@ -1,0 +1,61 @@
+# Verification Plan — CR:2026:002 Gateway Router + RAG Adapter
+# 綁定 GATE:VDD（治理頁 05）。Gateway 在 hot-path，延遲門檻嚴格。
+
+quality_profile:
+  id: "QP:GATEWAY:STANDARD"
+  plugin_overhead:
+    metric: added_latency_per_plugin   # Router/RAG 單插件額外延遲（不含上游資料抓取）
+    threshold_ms: 50
+    percentile: p95
+    measurement_point: gateway_plugin_boundary
+    environment: staging
+    workload: { requests_per_second: 30, concurrent_users: 20 }
+  reliability:
+    availability_target: 99.9          # Gateway 高於資料層（在關鍵路徑）
+    error_rate_max_percent: 0.1
+
+gate_vdd:
+  binds_to: "GATE:VDD"
+  trigger: { when: "post-Green AND pre-Deploy" }
+  preconditions:
+    - functional_tests: passing        # gateway-router/rag.feature 全綠
+    - red_evidence: present
+    - telemetry_hooks: present         # fallback 率/斷路器/RAG 越界攔截數
+    - quality_profile: resolved        # QP:GATEWAY:STANDARD
+  assertions:
+    performance:
+      - metric: p95_plugin_overhead
+        condition: "< quality_profile.plugin_overhead.threshold_ms"
+        at_load: quality_profile.plugin_overhead.workload
+    resilience:                        # Router REL-4 / 斷路器
+      - scenario: [primary_source_down, all_sources_down, quota_exceeded]
+        condition: "degrades_to_refused_without_crash AND never_falls_back_to_blacklisted"
+      - scenario: circuit_breaker
+        condition: "opens_on_threshold AND half_opens_after_cooldown"
+    security_domain:                   # RAG 核心：機器可判定
+      - check: rag_enforces_tenant_scope         # Inv-1
+        oracle: "contract-assert(cross-tenant retrieval = empty + TenantScopeViolationDetected)"
+      - check: rag_mem0_namespace_verified       # Inv-7
+        oracle: "assert(ns == tenant:seat:customer)"
+      - check: rag_pii_filtered                  # DI-1
+        oracle: "policy-lint(no natural-person PII in retrieved context)"
+      - check: rag_authority_ordered_no_scrape   # DI-7/DI-4
+        oracle: "assert(results sorted by authority; no scrape source)"
+    mutation:
+      - metric: mutation_score
+        condition: ">= M_threshold"    # 路由/越界/過濾邏輯需高殺變異
+  oracle:
+    performance: metric-query(load-test-report)
+    resilience: fault-injection-runner
+    security_domain: "deterministic contract/policy asserts"
+    mutation: mutation-testing-tool
+  on_fail:
+    policy: "reject | repair | escalate"
+    forbidden: implementer_agent_lowers_threshold
+  evidence_required:
+    - p50_p95_p99_plugin_overhead_report
+    - resilience_recovery_and_circuit_record
+    - rag_scope_enforcement_assert_log    # Inv-1/Inv-7 證據
+    - pii_filter_assert_log
+    - mutation_score_report
+  final_authority: production_telemetry

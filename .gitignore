@@ -17,3 +17,10 @@ build/
 test/evidence/
 *.coverage
 coverage/
+
+# python
+__pycache__/
+*.pyc
+
+# venv
+.venv/
