@@ -64,10 +64,45 @@ agent tool call → [ToolAuthZ]：
 
 ---
 
-## Router / RAG Adapter（相鄰，本輪輕描述）
+## Router 插件（CR-2026-002 · `REQ:GW:ROUTER:*`）
 
-- **Router**：多源 fallback（如 lvr 失效 → 標 source_unavailable 降級；geocoding TGOS→NLSC）。
-- **RAG Adapter**：檢索結果過濾刊登者/自然人個資，標 provenance 與來源權威度（政府 > 官方 API > 爬蟲）。
+> 來源路由 + 多源 fallback + 斷路器。完成 5 插件閘。
+
+**REQ:GW:ROUTER:001 — 來源路由（deterministic）**：依路由表把 `TOOL:*` 導向正確 MCP server（lvr/amenities/company/public-safety）；路由表為設定（非 LLM 判斷），未知 tool → 拒絕。
+
+**REQ:GW:ROUTER:002 — 多源 fallback（authority 階層）**：同一資料有多源時依**權威階層**選擇 `gov > official_api > osm > third_party_mcp(本輪未用) > scrape(禁)`；主源失效 → 依序退備源（如 geocoding TGOS→NLSC）；**全部失效 → 降級 `refused`（不崩，REL-4）**，不得自動降到禁用源（591/leju 永禁，DI-4）。
+
+**REQ:GW:ROUTER:003 — 斷路器（circuit breaker）**：單一來源連續失敗達閾值 → 暫斷該源、直接走降級，避免雪崩與配額耗盡（DI-8）；冷卻後半開重試。
+
+```
+tool call → [Router]：
+  resolve(tool → server) ; 未知 → reject
+  source healthy?(circuit) → open → 降級/備源
+  primary 失敗 → 依 authority 階層取備源(非禁用源)
+  全失敗 → outcome=refused(source_unavailable) ; 不崩(REL-4)
+```
+
+## RAG Adapter 插件（CR-2026-002 · `REQ:GW:RAG:*`）
+
+> 檢索路徑的合規閘——**與 PII/ToolAuthZ 同為不可繞過邊界**。涵蓋 mem0 與資料檢索結果。
+
+**REQ:GW:RAG:001 — 檢索結果 PII 過濾**：移除刊登者/自然人個資（與 PII 插件同規格，DI-1/Inv-8）；法人統編保留。
+
+**REQ:GW:RAG:002 — 檢索硬約束 tenant scope**：所有檢索（含 mem0）強制 `WHERE tenant_id=?`（Inv-1）+ mem0 namespace `tenant:seat:customer` 二次校驗（Inv-7）；越界結果丟棄並告警 `TenantScopeViolationDetected`。**這是 prompt injection→RAG 越界（H1）的最後防線**。
+
+**REQ:GW:RAG:003 — provenance + authority 排序**：每筆檢索結果帶 `{source, authority, confidence, as_of}`（DI-7）；依**權威階層**排序（gov 優先），低權威/低信心下沉或過濾；scrape 來源（禁）不得出現。
+
+**REQ:GW:RAG:004 — 去重 + 低信心過濾**：跨源去重；信心 < 閾值者不入 agent context（DI-6 精神）。
+
+```
+retrieval(query, ctx) → [RAG Adapter]：
+  enforce tenant scope (Inv-1) + mem0 ns 校驗 (Inv-7) → 越界丟棄+告警
+  PII 過濾 (DI-1)
+  標 provenance + authority (DI-7) → 依權威排序
+  去重 + 低信心過濾 → 回 scoped/filtered context
+```
+
+> Router/RAG 屬 Gateway 不可繞過層；品質門檻見 [`changes/CR-2026-002-gateway-router-rag/verification-plan.yaml`](changes/CR-2026-002-gateway-router-rag/verification-plan.yaml)（`QP:GATEWAY:STANDARD`，hot-path 低延遲）。驗收見 [`features/gateway-router.feature`](features/gateway-router.feature)、[`features/gateway-rag.feature`](features/gateway-rag.feature)。
 
 ---
 

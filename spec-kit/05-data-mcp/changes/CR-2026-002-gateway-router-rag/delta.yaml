@@ -1,0 +1,37 @@
+# Delta Spec — CR:2026:002 AI Gateway Router + RAG Adapter
+change_id: "CR:2026:002"
+intent: 補完 AI Gateway 的 Router 與 RAG Adapter WASM 插件（完成 5 插件閘）
+
+added:
+  - "REQ:GW:ROUTER:001"   # 來源路由（deterministic 路由表）
+  - "REQ:GW:ROUTER:002"   # 多源 fallback（authority 階層；禁降禁用源）
+  - "REQ:GW:ROUTER:003"   # 斷路器 circuit breaker
+  - "REQ:GW:RAG:001"      # 檢索結果 PII 過濾
+  - "REQ:GW:RAG:002"      # 檢索硬約束 tenant scope + mem0 namespace 校驗
+  - "REQ:GW:RAG:003"      # provenance + authority 排序
+  - "REQ:GW:RAG:004"      # 去重 + 低信心過濾
+  - "QP:GATEWAY:STANDARD" # gateway 插件 hot-path 延遲 Profile
+
+modified:
+  - "gateway-compliance.md#Router/RAG"   # 由「輕描述」→ 完整規格
+
+removed: []
+
+affected:
+  domain_invariants:
+    - "Inv-1"    # RAG 檢索 tenant scope（H1 最後防線）
+    - "Inv-7"    # mem0 namespace 校驗
+    - "DI-1"     # 檢索 PII 過濾
+    - "DI-4"     # fallback 禁降禁用源（591/leju）
+    - "DI-6"     # 低信心過濾
+    - "DI-7"     # provenance + authority 排序
+    - "DI-8"     # 斷路器保護配額
+  contracts:
+    - "../../02-spec/error-model.md#source_unavailable"
+    - "../../02-spec/error-model.md#SOURCE_QUOTA_EXCEEDED"
+  reliability:
+    - "../../02-spec/nfr.md#REL-4"   # 多源失效降級不崩
+  quality:
+    - "QP:GATEWAY:STANDARD"
+
+breaking_change: false
