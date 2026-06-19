@@ -1,0 +1,10 @@
+{
+  "name": "@hermes-re/tw-utils",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "自建 deterministic 台灣工具（重實作 twtools 功能；不連 hosted MCP）。對齊 spec-kit/05-data-mcp/twinkle-hub-alignment.md §3。",
+  "scripts": {
+    "test": "node --test test/*.test.ts"
+  }
+}
