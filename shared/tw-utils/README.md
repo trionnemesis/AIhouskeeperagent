@@ -31,6 +31,12 @@ node --test test/*.test.ts      # Node 22+，零依賴
 - **Mutation**：人工注入變異（`%5→%4`、`+1911→+1912`）皆被測試殺死，證明非弱測試；還原後 7/7。
 - 測試向量為**手算**，未複製 production 演算法到測試（防自證式測試）。
 
-## 待續（loop 下一批）
+## 資料 ETL（CR-2026-003）
 
-`郵遞區號/行政區碼`、`中英地址互轉`、`捷運路線`（需中華郵政/TDX open data，非純函式，下個 CR 接資料層）。
+`postalCode`/`cityToEnglish`/`metroLine`/`bankCode` 已改由 **ETL 載入** `data/*.json`（seed 先行，完整資料由 ETL 對官方來源產出）：
+- `etl/transform.ts`：純 transform（raw→normalized），STDD×VDD 可測核心。
+- `etl/run.ts`：**DI'd runner**（注入 fetcher；實際下載為 deploy-time）。
+- `etl/sources.ts`：官方來源 + 顯名/授權（DI-2/DI-8）。
+- `etl/load.ts` + `data/{postal,bank,city-en,metro}.json`。
+
+全套件 **24/24**（含既有 lookup 回歸 + ETL transform/run）。完整資料下載（中華郵政/TDX/財金）為 deploy-time I/O，由注入的 fetcher 提供。

@@ -1,0 +1,33 @@
+# Delta Spec — CR:2026:003 tw-utils 完整資料 ETL
+change_id: "CR:2026:003"
+intent: tw-utils 參考資料由 embedded fixture 升級為 ETL 管線產出
+
+added:
+  - "ETL:tw-utils:transform"   # 純 transform（raw→normalized）
+  - "ETL:tw-utils:run"         # DI'd runner（fetcher 可注入）
+  - "ETL:tw-utils:load"        # data/*.json 載入器
+  - "DATA:tw-utils:postal"     # data/postal.json
+  - "DATA:tw-utils:bank"       # data/bank.json
+  - "DATA:tw-utils:city-en"    # data/city-en.json
+  - "DATA:tw-utils:metro"      # data/metro.json
+
+modified:
+  - "shared/tw-utils/src/postal.ts"   # embedded → loadData('postal')
+  - "shared/tw-utils/src/bank.ts"
+  - "shared/tw-utils/src/address.ts"  # city-en 部分改 loadData
+  - "shared/tw-utils/src/metro.ts"
+
+removed: []
+
+affected:
+  domain_invariants:
+    - "DI-2"   # 來源顯名（ETL 標來源機關）
+    - "DI-8"   # 逐源讀 license、不可 hardcode 授權
+  contracts:
+    - "../../02-spec/configuration.md"  # ETL 來源/排程設定
+  patterns:
+    - "DI"     # runner 注入 fetcher（個人偏好：DI > 直接實例化）
+  tests:
+    - "shared/tw-utils/test/*.test.ts"  # 既有 18 須回歸綠
+
+breaking_change: false   # lookup 簽名不變；data seed 維持既有行為

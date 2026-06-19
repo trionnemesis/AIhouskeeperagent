@@ -1,15 +1,12 @@
 // REQ: tw-utils 地址工具（縣市英譯、地址後綴中→英縮寫）
-// 追溯：spec-kit/05-data-mcp/twinkle-hub-alignment.md §3、amenities-mcp.md
-// 最小 embedded fixture（範例子集）；完整資料由 ETL（資料層）載入。
-// 未命中回 null。deterministic、無外部依賴。
+// 追溯：twinkle-hub-alignment.md §3、amenities-mcp.md、CR-2026-003(ETL)
+// 縣市英譯由 ETL 載入 data/city-en.json；後綴為規則（embedded）。
 
-// Why: 台/臺 同字異形，key 正規化為 '台'。
-const CITY_EN: Record<string, string> = {
-  '台北市': 'Taipei City',
-  '新北市': 'New Taipei City',
-  '高雄市': 'Kaohsiung City',
-};
+import { loadData } from '../etl/load.ts';
 
+const CITY_EN = loadData<Record<string, string>>('city-en');
+
+// 地址後綴為規則對應（非資料集），維持 embedded。
 const SUFFIX_EN: Record<string, string> = {
   '路': 'Rd.',
   '街': 'St.',

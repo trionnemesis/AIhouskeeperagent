@@ -31,7 +31,7 @@
 | [`amenities-mcp.md`](amenities-mcp.md) | **P1** 設施/交通/geocoding server |
 | [`company-registry-mcp.md`](company-registry-mcp.md) | **P2(部分)** GCIS 公司正規化；建案/承造人缺口標記 |
 | [`public-safety-mcp.md`](public-safety-mcp.md) | **P2** 治安/防詐（A1/A2 密度/區域犯罪/165）；DI-5 粒度封頂；依 STDD×VDD 產出 |
-| [`changes/`](changes/) | STDD×VDD Change Packages：`CR-2026-001`(public-safety)、`CR-2026-002`(Gateway Router+RAG) |
+| [`changes/`](changes/) | STDD×VDD Change Packages：`CR-2026-001`(public-safety)、`CR-2026-002`(Gateway Router+RAG)、`CR-2026-003`(tw-utils 完整資料 ETL) |
 | [`gateway-compliance.md`](gateway-compliance.md) | AI Gateway **5 WASM 插件完整**：Policy/PII/Router/ToolAuthZ/RAG + 黑名單 |
 | [`erd.dbml`](erd.dbml) | 資料 MCP 快取 / provenance / 配額 schema |
 | [`features/`](features/) | BDD 場景（行情/PII egress/geocoding/黑名單/顯名） |
