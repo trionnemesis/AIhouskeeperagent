@@ -1,0 +1,16 @@
+{
+  "name": "hermes-real-estate-spec-kit-bdd",
+  "version": "0.1.0",
+  "private": true,
+  "description": "spec-kit BDD 可執行骨架。於 spec-kit/ 下 `npm install` 後即可 `npm run bdd`；或將 03-features/ 複製進實作 repo。step 骨架為 spec-level，領域步驟需在實作 repo 接真實 SUT。",
+  "scripts": {
+    "bdd": "cucumber-js --config 03-features/cucumber.js",
+    "bdd:gateB": "cucumber-js --config 03-features/cucumber.js --profile gateB"
+  },
+  "devDependencies": {
+    "@cucumber/cucumber": "^11.0.0",
+    "@types/node": "^20.0.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.4.0"
+  }
+}

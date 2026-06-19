@@ -1,0 +1,160 @@
+// 資料 MCP 層 schema (DBML) — 快取 / provenance / 配額 / 黑名單
+// 與主 spec erm.dbml 分離（資料層為共用參考資料，非租戶業務資料）
+// 渲染：dbdiagram.io
+//
+// 注意：本層多為「共用公開參考資料」，預設非 tenant-scoped；
+// 但 PII（門牌/地號/自然人）於 Gateway egress 遮罩（DI-1），原值不長存於對外快取。
+
+Project lvr_data_mcp {
+  database_type: 'PostgreSQL'
+  Note: '資料取得層。provenance 必附（DI-7）；行情短 TTL（DI-9）；授權逐 dataset 記錄（DI-8）。'
+}
+
+// ── 實價登錄快取（lvr-mcp）──────────────────────────
+
+Table lvr_trades {
+  id            bigint [pk, increment]
+  deal_seq      varchar [not null, note: '交易序號（JOIN main/build/land/park 之鍵）']
+  district      varchar [not null]
+  deal_type     varchar [not null]      // sale|rent
+  building_type varchar [not null]      // 預售|成屋|中古
+  trade_date    date [not null, note: 'TimestampGuard：<2010 或 >今日+90天 一律剔除（Inv-4）']
+  total_price   bigint
+  unit_price_net numeric [note: '重算淨單價=(總價−車位價)/(主+附屬坪數)，不可用來源單價欄']
+  area_ping     numeric
+  room_layout   varchar
+  has_parking   boolean [not null, default: false]
+  parking_price bigint
+  flags         jsonb [note: '特殊交易旗標：親友/含裝潢/急售/債權債務…']
+  project_name  varchar [note: '預售屋建案名（rps28）；成屋通常空']
+  // 門牌/地號為 PII（R1 來源未脫敏）→ 不長存對外快取；如需原值另存 scope 限制表並於 egress 遮罩
+  source        varchar [not null, default: '內政部不動產交易實價查詢服務網'] // DI-2 顯名
+  data_as_of    varchar [not null]      // 資料更新至 YYYY-MM（DI-3）
+  ingested_at   timestamptz [not null]
+  indexes {
+    (district, deal_type, trade_date)
+    (district, building_type)
+    deal_seq
+  }
+  Note: 'lvr-mcp 行情快取。短 TTL；近 1-2 季定期重抓校正（DI-9）。'
+}
+
+// ── 設施 / 交通 / 座標快取（amenities-mcp）─────────────
+
+Table facilities {
+  id            bigint [pk, increment]
+  type          varchar [not null]      // school|hospital|convenience|disamenity|transit
+  sub_type      varchar                 // 國小|區域醫院|7-11|殯葬|捷運…
+  name          varchar [not null]
+  address       varchar
+  lat           numeric [note: 'geocode 後座標；低信心不寫精準值（DI-6）']
+  lng           numeric
+  geocode_confidence numeric [note: '0–1；低於閾值不輸出精準座標']
+  geocode_source varchar                // TGOS|NLSC|OSM
+  source        varchar [not null]      // 來源機關（DI-2）；OSM 標 ODbL
+  authority     varchar [not null]      // gov|official_api|osm|third_party_mcp（權威度，DI-7）
+  data_as_of    varchar [not null]
+  district_hint varchar
+  ingested_at   timestamptz [not null]
+  indexes {
+    (type, district_hint)
+    (lat, lng)
+  }
+  Note: 'open-data CSV(學校每學年/醫療每日/超商每月) ETL 入庫；TDX 站點走即時 API 不長存。'
+}
+
+// ── 公司 / 法人正規化快取（company-registry-mcp）──────
+
+Table companies {
+  uniform_no    varchar [pk, note: '統編＝canonical key（同名/解散/全半形以此去重）']
+  name          varchar [not null]
+  status        varchar [not null]      // 核准設立|解散|撤銷…
+  // 自然人負責人姓名：DI-1 egress 遮罩，不對外明文；如落地僅限 scope + 稽核
+  source        varchar [not null, default: '經濟部商業司 GCIS'] // DI-2
+  data_as_of    varchar [not null]
+  ingested_at   timestamptz [not null]
+  Note: 'GCIS resolve_company 快取。落地散布須在告知書授權目的內（個資法§20，DI-8）。'
+}
+
+// ── provenance（DI-7：每筆對外/入庫資料溯源）──────────
+
+Table provenance {
+  id            bigint [pk, increment]
+  entity_type   varchar [not null]      // lvr_trade|facility|company
+  entity_ref    varchar [not null]
+  source        varchar [not null]
+  authority     varchar [not null]      // gov|official_api|osm|third_party_mcp(通用,本輪未用)|scrape
+  confidence    numeric [not null]
+  as_of         varchar [not null]
+  recorded_at   timestamptz [not null]
+  indexes { (entity_type, entity_ref) }
+  Note: 'DI-7：標 source+authority+confidence+as_of，過濾後才入 mem0。'
+}
+
+// ── 來源授權 / 配額 / 黑名單（DI-4/DI-8）──────────────
+
+Table source_licenses {
+  dataset_key   varchar [pk]            // dataset id 或來源 key
+  license       varchar [not null]      // 政府資料開放授權第1版 | ODbL | GCIS告知書 …
+  attribution   varchar [not null]      // 顯名文字（DI-2）
+  usage_purpose varchar                 // 授權目的（GCIS 告知書範圍，DI-8）
+  notes         varchar
+  Note: 'ingest 逐 dataset 讀此表，不可 hardcode 授權（DI-8）。'
+}
+
+Table source_quota {
+  source_key    varchar [pk]            // tdx|tgos|gcis…
+  daily_limit   int [note: 'TGOS/TDX/GCIS 每日上限；未知者 null 並標 unverified（Q2/Q3）']
+  concurrent_limit int
+  charged       boolean [not null, default: false] // TDX 2024/1 起部分收費
+  window_used   int [not null, default: 0]
+  window_reset_at timestamptz
+  Note: 'DI-8：站台級配額追蹤；Gateway 另做租戶級配額。'
+}
+
+Table source_blacklist {
+  source_key    varchar [pk]            // 591|leju
+  reason        varchar [not null]      // 公平會106084 / Cloudflare+§358/§359 / ToS
+  allowlisted   boolean [not null, default: false] // 須法務簽核 + 授權證明才 true
+  legal_ref     varchar
+  Note: 'DI-4：ToolAuthZ 黑名單；預設禁用，allowlisted 需法務 + B2B 授權。'
+}
+
+// ── public-safety-mcp（治安/防詐 · CR:2026:001）──────
+// 共用參考資料（非 tenant-scoped）。DI-5：對外一律聚合/區域級，禁門牌/點位精準。
+
+Table traffic_accidents {
+  id            bigint [pk, increment]  // REQ:PUBSAFE:001
+  lat           numeric [not null]      // A1/A2 點位（不含個資）；DI-5：輸出僅聚合密度，不回個別點
+  lng           numeric [not null]
+  severity      varchar [not null]      // A1|A2
+  occurred_at   date [not null]         // Inv-4 TimestampGuard
+  source        varchar [not null, default: '內政部警政署'] // DI-2
+  as_of         varchar [not null]      // DI-3
+  ingested_at   timestamptz [not null]
+  indexes { (lat, lng) }
+  Note: 'DI-5：tool 層以周邊密度聚合輸出，schema 存點位但禁對外回單點/門牌。'
+}
+
+Table crime_area_stats {
+  id            bigint [pk, increment]  // REQ:PUBSAFE:002（dataset 14200 等）
+  district      varchar [not null]      // 鄉鎮市區（粒度封頂，DI-5）
+  category      varchar [not null]      // 刑案類別
+  count         int [not null]
+  period        varchar [not null]      // 統計期間
+  source        varchar [not null]      // DI-2
+  as_of         varchar [not null]
+  ingested_at   timestamptz [not null]
+  indexes { (district, category) }
+  Note: 'DI-5：止於鄉鎮市區；禁套單一物件、禁負面標籤。'
+}
+
+Table fraud_domains {
+  id            bigint [pk, increment]  // REQ:PUBSAFE:003（165，P3）
+  value         varchar [not null]      // 網域/關鍵字
+  listed_at     date
+  source        varchar [not null, default: '165'] // DI-2
+  as_of         varchar [not null]
+  indexes { value }
+  Note: '防詐查核；無地理粒度。'
+}

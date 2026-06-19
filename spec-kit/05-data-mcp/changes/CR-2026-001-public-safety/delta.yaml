@@ -1,0 +1,42 @@
+# Delta Spec — CR:2026:001 public-safety-mcp（治理頁 03）
+# 差異描述：只記新增/修改/移除 + 受影響 Stable ID；不重寫 Canonical Spec。
+change_id: "CR:2026:001"
+intent: 新增 public-safety-mcp（治安/防詐），供房仲物件周邊安全場景
+
+added:
+  - "REQ:PUBSAFE:001"      # 交通事故周邊密度（A1/A2 點位聚合）
+  - "REQ:PUBSAFE:002"      # 區域治安統計（鄉鎮市區粒度）
+  - "REQ:PUBSAFE:003"      # 防詐查核（165，P3）
+  - "TOOL:PUBSAFE:001"
+  - "TOOL:PUBSAFE:002"
+  - "TOOL:PUBSAFE:003"
+  - "UI:PUBSAFE:*"         # agent/LINE 回應狀態（委派 line-channel）
+  - "DATA:crime_area_stats"
+  - "DATA:traffic_accidents"
+  - "DATA:fraud_domains"
+
+modified: []              # 不修改既有 server 規格
+
+removed: []
+
+affected:                 # 受影響但「引用、不重定義」的既有 Stable ID
+  domain_invariants:
+    - "DI-5"              # 治安粒度封頂（核心，本 CR 主要受其約束）
+    - "DI-2"              # 來源顯名
+    - "DI-3"              # 資料時點揭露
+    - "DI-7"              # provenance 必附
+    - "DI-8"              # 配額/license 遵守
+    - "Inv-4"            # TimestampGuard（事故日期）
+    - "Inv-5"            # 拒答優於猜測
+  contracts:
+    - "../../02-spec/error-model.md#SOURCE_QUOTA_EXCEEDED"
+    - "../../02-spec/error-model.md#market-reason(source_unavailable 模式)"
+  ui:
+    - "../../02-spec/line-channel.md"   # UI 狀態委派 LINE 層
+  quality:
+    - "QP:DATA-MCP:READ"                # 見 verification-plan.yaml
+  gateway:
+    - "gateway-compliance.md#Policy"    # DI-5 中性化由 Policy 強制
+    - "gateway-compliance.md#ToolAuthZ" # 角色控管
+
+breaking_change: false    # 純新增，無既有 consumer 破壞

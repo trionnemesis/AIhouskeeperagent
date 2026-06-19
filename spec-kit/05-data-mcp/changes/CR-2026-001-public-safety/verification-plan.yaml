@@ -1,0 +1,71 @@
+# Verification Plan — CR:2026:001 public-safety-mcp
+# 綁定 GATE:VDD（治理頁 05）。品質門檻 machine-checkable，實作 Agent 不可調降。
+
+quality_profile:
+  id: "QP:DATA-MCP:READ"            # 資料 MCP 讀取型（lvr/amenities/public-safety 共用）
+  api_latency:
+    metric: server_response_time   # MCP tool call → 回傳（不含上游 open data 首次抓取）
+    threshold_ms: 800              # 讀取型查詢（含本地快取命中）
+    percentile: p95
+    measurement_point: mcp_tool_boundary
+    environment: staging
+    workload:
+      requests_per_second: 10
+      concurrent_users: 10
+  cold_source_fetch:
+    metric: upstream_csv_ingest    # 冷抓 open data（排程 ETL，非線上路徑）
+    note: "非互動門檻；ETL 背景作業，失敗→source_unavailable 降級(REL-4)"
+  reliability:
+    availability_target: 99.5      # 資料層讀取（低於核心對話迴圈）
+    error_rate_max_percent: 0.5
+
+gate_vdd:
+  binds_to: "GATE:VDD"
+  trigger: { when: "post-Green AND pre-Deploy" }
+  preconditions:
+    - functional_tests: passing            # features/public-safety.feature 全綠
+    - red_evidence: present                 # 見 GATE:RED（gates.md）
+    - telemetry_hooks: present              # 治安用量 + DI-5 違規計數
+    - quality_profile: resolved             # QP:DATA-MCP:READ
+  assertions:
+    performance:
+      - metric: p95_latency
+        condition: "< quality_profile.api_latency.threshold_ms"
+        at_load: quality_profile.api_latency.workload
+    reliability:
+      - metric: slo_attainment
+        condition: ">= quality_profile.reliability.availability_target"
+    resilience:                             # REL-4：上游失效降級
+      - scenario: [source_unavailable, quota_exceeded, timeout]
+        condition: "degrades_to_refused_without_crash"
+    security:
+      - checks: [SAST, SCA, policy_gate]
+        condition: no_unwaived_findings
+    domain_specific:                        # 本 CR 核心：DI-5 機器可判定
+      - check: granularity_cap_enforced     # 無門牌/點位級輸出
+        oracle: "schema-assert(output has no parcel/point address)"
+      - check: no_negative_labels           # 無「高犯罪/治安差」標籤
+        oracle: "policy-lint(output)"
+      - check: area_stat_not_applied_to_listing
+        oracle: "contract-assert(no per-listing safety score)"
+    mutation:
+      - metric: mutation_score
+        condition: ">= M_threshold"         # 治安粒度/拒答邏輯需高殺變異
+  oracle:
+    performance: metric-query(load-test-report)
+    reliability: metric-query(SLO-dashboard)
+    resilience: fault-injection-runner
+    security: scanner-report
+    domain_specific: "deterministic schema/contract/policy asserts"   # 非裸 LLM 判定
+    mutation: mutation-testing-tool
+  on_fail:
+    policy: "reject | repair | escalate"
+    forbidden: implementer_agent_lowers_threshold
+  evidence_required:
+    - p50_p95_p99_report
+    - slo_record
+    - resilience_recovery_record
+    - scan_report_with_waivers
+    - mutation_score_report
+    - di5_granularity_assert_log          # DI-5 專屬證據
+  final_authority: production_telemetry    # Telemetry 為最終裁決（DI-5 違規回報→Delta Spec）

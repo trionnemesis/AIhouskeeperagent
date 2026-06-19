@@ -1,0 +1,19 @@
+# deps / build
+node_modules/
+dist/
+build/
+*.tsbuildinfo
+
+# env / secrets（絕不入版控，見 spec-kit/02-spec/configuration.md）
+.env
+.env.*
+!.env.example
+
+# logs / os
+*.log
+.DS_Store
+
+# test evidence / reports（實作期產生）
+test/evidence/
+*.coverage
+coverage/

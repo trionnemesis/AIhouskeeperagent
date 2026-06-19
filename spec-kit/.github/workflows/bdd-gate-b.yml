@@ -1,0 +1,35 @@
+# Gate B 合規關卡 CI：@gateB 全綠才允許 merge / 部署。
+# 對應 north-star-and-gates.md Gate B —「接 mem0 / 接真實客戶資料」的硬前置。
+# 註：此檔置於 spec-kit/ 下作為樣板；實作 repo 應移至 repo 根 .github/workflows/。
+name: BDD Gate B (Compliance)
+
+on:
+  pull_request:
+    paths:
+      - '03-features/**'
+      - '05-data-mcp/features/**'
+      - 'src/**'
+      - 'steps/**'
+  push:
+    branches: [main]
+
+jobs:
+  gate-b:
+    name: 'Gate B — tenant isolation / PII / HITL / audit'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 'lts/*'
+      # spec-kit 提供 package.json（devDeps）；尚無 committed lockfile，故用 npm install。
+      # 實作 repo 應 commit lockfile 後改回 `npm ci` 並啟用 cache: npm。
+      - run: npm install
+      # dual-tenant fixture 由 World/Background 注入，即使 prod 為單租戶部署隔離（Inv-1 測試策略）
+      - name: Run @gateB scenarios (must all pass)
+        run: npx cucumber-js --profile gateB
+      # 全 BDD（非阻擋）供能見度
+      - name: Run full BDD (non-blocking)
+        run: npx cucumber-js || true
+
+  # 設為 required status check：Settings → Branches → Branch protection → require "gate-b"

@@ -1,0 +1,264 @@
+// 房仲第二大腦 · 領域資料模型 (DBML)
+// 報告 §2.4/§4.3 指定的 spec/erm.dbml
+// 渲染：https://dbdiagram.io  ·  產 SQL：dbml2sql
+//
+// 全域不變量 Inv-1：所有業務表帶 tenant_id NOT NULL，資料存取層強制 WHERE tenant_id=?
+// 全域不變量 Inv-3：audit_logs append-only（無 UPDATE/DELETE）
+// PII 欄位以 [note: 'PII'] 標註，受 Inv-8（最小揭露/脫敏）約束
+
+Project hermes_real_estate {
+  database_type: 'PostgreSQL'
+  Note: 'MVP schema. 部署隔離模式下 tenant_id 由服務綁定；應用層多租戶下作 row scope。'
+}
+
+// ── C1 Identity & Tenancy ───────────────────────────────
+
+Table tenants {
+  id            uuid [pk]
+  name          varchar [not null]      // 經紀業
+  status        varchar [not null, default: 'active'] // active|suspended|archived
+  created_at    timestamptz [not null]
+  Note: '隔離最外層邊界（租戶）。軟刪除。'
+}
+
+Table branches {
+  id            uuid [pk]
+  tenant_id     uuid [not null, ref: > tenants.id]
+  name          varchar [not null]      // 店
+  created_at    timestamptz [not null]
+  indexes { tenant_id }
+}
+
+Table seats {
+  id            uuid [pk]
+  tenant_id     uuid [not null, ref: > tenants.id]
+  branch_id     uuid [not null, ref: > branches.id]
+  display_name  varchar [not null]      // 經紀人（per-seat 計費單位）
+  status        varchar [not null, default: 'active']
+  created_at    timestamptz [not null]
+  indexes { (tenant_id, branch_id) }
+  Note: '經紀人=系統使用者。注意與 AI Agent 區分。'
+}
+
+Table identities {
+  id            uuid [pk]
+  tenant_id     uuid [not null, ref: > tenants.id]
+  seat_id       uuid [not null, ref: > seats.id]
+  line_user_id  varchar [not null, unique] // LINE userId 綁定
+  allowlisted   boolean [not null, default: false]
+  created_at    timestamptz [not null]
+  Note: 'TenantScopeResolver 由 line_user_id 解析 (tenant, seat)。allowlist 控管。'
+}
+
+// ── C5 Customer & CRM（★Core · PII 邊界）────────────────
+
+Table customers {
+  id            uuid [pk]
+  tenant_id     uuid [not null, ref: > tenants.id]      // Inv-1 錨點
+  owner_seat_id uuid [not null, ref: > seats.id]        // 歸戶
+  display_name  varchar [not null]                       // 稱謂（可代號化, Inv-8）
+  phone         varchar [note: 'PII']                    // 受 Inv-8 脫敏
+  email         varchar [note: 'PII']
+  national_id   varchar [note: 'PII，MVP 治理最小集建議不存真值/用代號']
+  role          varchar [not null]                       // buyer|seller|owner
+  status        varchar [not null, default: 'active']    // active|archived|erased
+  memory_ns     varchar [note: 'mem0 namespace = tenant:seat:customer (Inv-7)']
+  created_at    timestamptz [not null]
+  deleted_at    timestamptz [note: 'Inv-10 被遺忘權：刪除後 tombstone，PII 欄位清空/匿名化']
+  indexes {
+    (tenant_id, owner_seat_id)
+    tenant_id
+  }
+  Note: 'PII 邊界。含 PII 的建立/變更必經 HITL (Inv-2)。刪除流程見 invariants.md Inv-10。'
+}
+
+Table customer_requirements {
+  id            uuid [pk]
+  tenant_id     uuid [not null, ref: > tenants.id]
+  customer_id   uuid [not null, ref: > customers.id]
+  budget_min    bigint                  // 結構化（非自由文字）→ 供精準配對
+  budget_max    bigint
+  currency      varchar [not null, default: 'TWD']
+  districts     jsonb [note: 'Postgres: jsonb + GIN，配對用 districts @> ARRAY[?]（PERF-2）；SQLite 路徑改正規化 requirement_districts junction 表']
+  room_layout   varchar                 // 3房2廳
+  must_have     jsonb [note: '必要條件；若用於配對 WHERE 則 jsonb+GIN，否則 tool 層唯讀']
+  nice_to_have  jsonb [note: '加分條件']
+  priority      int [default: 0]
+  created_at    timestamptz [not null]
+  indexes {
+    (tenant_id, customer_id)
+    (tenant_id, budget_min, budget_max)  // 配對範圍查詢
+  }
+  Note: '結構化是 Core：Markdown 做不到「預算 AND 區域 AND 房型」精準比對。MVP 配對謂詞固定為 districts + budget(+room_layout)；must_have/nice_to_have 為 tool 層唯讀、不進 WHERE。districts(jsonb) 的 GIN 索引由 migration 手寫 SQL 建立（CREATE INDEX ... USING GIN(districts)），dbml 僅示意（PERF-2 hard gate 依賴此 GIN）。'
+}
+
+// ── C4/C6 Listing ───────────────────────────────────────
+
+Table listings {
+  id            uuid [pk]
+  tenant_id     uuid [not null, ref: > tenants.id]
+  owner_seat_id uuid [not null, ref: > seats.id]
+  title         varchar
+  address       varchar [note: '可含敏感位置，Inv-8']
+  district      varchar [not null]
+  building_type varchar [not null]      // 預售|成屋|中古
+  price         bigint
+  room_layout   varchar
+  area_ping     numeric                 // 坪數（單價雙重檢核用, Inv-4 旁證）
+  status        varchar [not null, default: 'open'] // open|reserved|closed|delisted
+  created_at    timestamptz [not null]
+  indexes {
+    (tenant_id, district, status)
+    (tenant_id, price)
+  }
+}
+
+Table listing_copies {
+  id            uuid [pk]
+  tenant_id     uuid [not null, ref: > tenants.id]
+  listing_id    uuid [not null, ref: > listings.id]
+  kind          varchar [not null]      // title|description
+  draft_text    text [not null]
+  final_text    text                    // 核准後
+  status        varchar [not null, default: 'draft'] // draft|approved|rejected
+  model         varchar
+  token_cost    int
+  hitl_id       uuid [ref: > hitl_approvals.id]
+  created_at    timestamptz [not null]
+  Note: 'Phase1 killer。未核准 draft 不外流 (Inv-2)。'
+}
+
+Table viewing_briefings {
+  id            uuid [pk]
+  tenant_id     uuid [not null, ref: > tenants.id]
+  listing_id    uuid [ref: > listings.id]
+  district      varchar
+  content       text [not null]
+  sources       varchar [not null, note: 'JSON：外部地理資料來源（捷運/學區）必附 (Inv-6 精神)']
+  created_at    timestamptz [not null]
+}
+
+// ── C7 Interaction & Scheduling ─────────────────────────
+
+Table interactions {
+  id            uuid [pk]
+  tenant_id     uuid [not null, ref: > tenants.id]
+  customer_id   uuid [ref: > customers.id]
+  listing_id    uuid [ref: > listings.id]
+  type          varchar [not null]      // viewing|negotiation|followup|note
+  note          text
+  occurred_at   timestamptz [not null]
+  indexes { (tenant_id, customer_id, occurred_at) }
+}
+
+Table follow_up_tasks {
+  id              uuid [pk]
+  tenant_id       uuid [not null, ref: > tenants.id]
+  seat_id         uuid [not null, ref: > seats.id]
+  customer_id     uuid [ref: > customers.id]
+  kind            varchar [not null]    // followup|contract_expiry|callback
+  due_at          timestamptz [not null]
+  status          varchar [not null, default: 'pending'] // pending|pushed|done|canceled
+  idempotency_key varchar [not null, note: 'Inv-9：= correlation_id+kind+due_at；唯一性 tenant 範圍化（見下方 index），非全表 unique']
+  created_at      timestamptz [not null]
+  indexes {
+    (tenant_id, due_at, status)
+    (tenant_id, idempotency_key) [unique]
+  }
+}
+
+// ── C8 Market Intelligence（降級 · 防護快取）────────────
+
+Table market_comp_cache {
+  id              uuid [pk]
+  tenant_id       uuid [not null, ref: > tenants.id]
+  query_address   varchar
+  query_district  varchar [not null]
+  data_as_of      varchar [not null, note: '資料更新至 YYYY-MM (Inv-6)']
+  confidence      numeric [not null]    // 0–1 (Inv-5)
+  outcome         varchar [not null]    // provided|refused
+  refused_reason  varchar               // stale|garbage|low_confidence|addr_mismatch
+  payload         text [note: 'JSON：guarded comps（已過 TimestampGuard Inv-4）']
+  created_at      timestamptz [not null]
+  Note: 'ACL 包 lvr-trades。任何未防呆查詢會回 2101 垃圾值。'
+}
+
+// ── C2 Governance（Cross-cutting）───────────────────────
+
+Table hitl_approvals {
+  id            uuid [pk]
+  tenant_id     uuid [not null, ref: > tenants.id]
+  seat_id       uuid [not null, ref: > seats.id]
+  subject_type  varchar [not null]      // listing_copy|customer_profile|outbound_msg|market_comp|customer_erasure
+  subject_ref   uuid [not null, note: 'outbound_msg→outbound_messages.id；listing_copy→listing_copies.id；customer_*→customers.id（多型參照，無 DB FK）']
+  risk_level    varchar [not null]      // low|high
+  proposed      text [not null]         // 草稿 payload
+  decision      varchar [not null, default: 'pending'] // pending|approved|rejected
+  decided_by    uuid [ref: > seats.id]
+  decided_at    timestamptz
+  reason        varchar
+  created_at    timestamptz [not null]
+  indexes { (tenant_id, decision) }
+  Note: 'Inv-2：對外/寫入/high-risk 動作的放行閘。'
+}
+
+Table audit_logs {
+  id             bigint [pk, increment]
+  tenant_id      uuid [not null, ref: > tenants.id]
+  actor_type     varchar [not null]     // human|agent|system（區分 AI vs 人, OBS-3）
+  actor_ref      uuid                   // seat_id 或 agent/system 識別
+  action         varchar [not null]     // command/event 名
+  scope          varchar [not null]     // 解析到的 (tenant,seat,customer)
+  correlation_id varchar [not null]     // OBS-2：串接同一流程
+  causation_id   varchar                // OBS-3：上游事件/命令（因果鏈）
+  payload_hash   varchar [not null]     // 不存原文，存雜湊（Inv-8）
+  pii_accessed   boolean [not null, default: false]
+  occurred_at    timestamptz [not null]
+  indexes {
+    (tenant_id, occurred_at)
+    (tenant_id, correlation_id)
+  }
+  Note: 'Inv-3：append-only。部署時 REVOKE UPDATE,DELETE ON audit_logs FROM app_role（或 BEFORE UPDATE/DELETE 觸發器 RAISE），落地 SEC-3。OBS-3 可由 correlation_id 聚合、causation_id 鏈接。codebase 原無此表。'
+}
+
+Table error_reports {
+  id            uuid [pk]
+  tenant_id     uuid [not null, ref: > tenants.id]
+  seat_id       uuid [not null, ref: > seats.id]
+  category      varchar [not null]      // mispricing|wrong_info|other
+  source_ref    uuid                    // 指向出錯的 comp/copy/msg
+  description   text
+  created_at    timestamptz [not null]
+  indexes { (tenant_id, category) }
+  Note: '北極星反指標：mispricing 即觸發停損檢討。'
+}
+
+Table outbound_messages {
+  id              uuid [pk]
+  tenant_id       uuid [not null, ref: > tenants.id]
+  seat_id         uuid [not null, ref: > seats.id]
+  customer_id     uuid [ref: > customers.id]
+  channel         varchar [not null]    // line
+  kind            varchar [not null]    // reply|push
+  idempotency_key varchar [not null]    // 冪等（Inv-9）
+  hitl_id         uuid [ref: > hitl_approvals.id] // 對外訊息經 HITL 放行（Inv-2）
+  status          varchar [not null]    // queued|sent|failed
+  token_cost      int
+  push_billed     boolean [not null, default: false] // 計費 Push（reply token 逾時 fallback）
+  sent_at         timestamptz
+  indexes {
+    (tenant_id, sent_at)
+    (tenant_id, idempotency_key) [unique]
+  }
+  Note: '解決 hitl_approvals.subject_type=outbound_msg 的 subject_ref dangling；承載 Push/Reply 落地與計數（COST-3/OBS-1）。'
+}
+
+Table tenant_usage_monthly {
+  tenant_id     uuid [not null, ref: > tenants.id]
+  yyyymm        varchar [not null]      // 月度彙總
+  push_count    int [not null, default: 0]   // COST-3 月 Push 計數
+  token_count   bigint [not null, default: 0] // OBS-1 token 用量
+  updated_at    timestamptz [not null]  // 彙總刷新時間（判斷聚合新鮮度）
+  indexes { (tenant_id, yyyymm) [pk] }
+  Note: '由 outbound_messages 聚合的物化彙總，支撐 COST-3 額度告警與 OBS-1 用量。'
+}
