@@ -1,0 +1,26 @@
+change_id: "CR:2026:004"
+quality_profile:
+  id: "QP:ETL:BATCH"
+  note: "背景批次；重正確性與冪等。"
+gate_vdd:
+  binds_to: "GATE:VDD"
+  trigger: { when: "post-Green AND pre-Deploy" }
+  preconditions: [functional_tests_passing, red_evidence_present]
+  assertions:
+    correctness:
+      - check: parser_deterministic            # 同 CSV text → 同 rows
+      - check: roc_to_iso_correct              # 1151024 → 2026-10-24
+      - check: lvr_dates_pass_timestamp_guard  # ROC→ISO 後可被 Inv-4 過濾
+      - check: pubsafe_area_level_only         # ingest 輸出無經緯度/門牌（DI-5）
+      - check: di_injection                    # fetcher 注入（測試不真實下載）
+    real_run:
+      - check: live_fetch_smoke                # 真實下載+ingest+service 至少一次成功（demo）
+    mutation:
+      - metric: mutation_score
+        condition: ">= M_threshold"
+  oracle:
+    correctness: "unit asserts (sample CSV)"
+    real_run: "live download + service call (record counts)"
+    mutation: "manual cp+diff (+清 __pycache__)"
+  on_fail: { policy: "reject | repair", forbidden: implementer_agent_lowers_threshold }
+  final_authority: production_telemetry

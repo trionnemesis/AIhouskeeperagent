@@ -1,0 +1,29 @@
+change_id: "CR:2026:004"
+intent: mcp-lvr / mcp-public-safety 接真實 open data ingest
+
+added:
+  - "ETL:lvr:parse"        # parse_lvr_csv（純）
+  - "ETL:lvr:roc"          # roc_to_iso（純）
+  - "ETL:lvr:ingest"       # ingest_lvr(fetcher)（DI）+ live fetcher
+  - "ETL:pubsafe:parse"    # parse_crime_csv（純）
+  - "ETL:pubsafe:aggregate" # aggregate_crime（純，區域級）
+  - "ETL:pubsafe:ingest"   # ingest_crime(fetcher)（DI）+ live fetcher
+
+modified: []   # 不改既有 guards/service 介面；ingest 為新模組
+
+removed: []
+
+affected:
+  domain_invariants:
+    - "Inv-4"   # ROC→ISO 後過 timestamp_guard
+    - "Inv-5"   # 資料不足→query_market refused
+    - "DI-5"    # public-safety 維持區域級、不引點位
+    - "DI-2"    # 顯名（plvr/警政署）
+    - "DI-8"    # 來源 license
+    - "DI-9"    # 行情時效（季更，real fetch 取最新季）
+  patterns: ["DI"]   # fetcher 注入
+  sources:
+    - "plvr.land.moi.gov.tw/DownloadSeason（政府資料開放授權第1版）"
+    - "data.gov.tw dataset 14200 犯罪資料（opdadm.moi.gov.tw）"
+
+breaking_change: false
