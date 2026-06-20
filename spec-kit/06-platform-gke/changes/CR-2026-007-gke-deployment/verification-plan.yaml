@@ -1,0 +1,39 @@
+change_id: "CR:2026:007"
+quality_profile:
+  id: "QP:PLATFORM:GKE"
+  note: "infra 即程式：manifest policy（靜態）+ 叢集行為（動態）雙層；安全不可繞過為紅線。"
+
+# 本輪 GATE:SPEC 通過；以下為 Phase 3 執行與驗證計畫（預先規格化）。
+gate_red:
+  binds_to: "GATE:RED"
+  red_evidence:
+    - check: policy_fails_on_open_egress       # 故意給「app pod 可直連 internet」manifest → conftest 須失敗
+    - check: policy_fails_on_latest_tag        # 含 :latest 的 image → 須失敗
+    - check: policy_fails_on_missing_tenant_np # 缺跨租戶 default-deny NetworkPolicy → 須失敗
+gate_green:
+  binds_to: "GATE:GREEN"
+  assertions:
+    - check: kubeconform_valid                 # 所有 manifest schema 合法
+    - check: conftest_policies_pass            # egress default-deny / no latest / runAsNonRoot / 跨租戶零連通
+    - check: terraform_validate                # IaC 靜態驗證
+gate_vdd:
+  binds_to: "GATE:VDD"
+  assertions:
+    security:
+      - check: egress_unbypassable             # kind/staging：app pod 直連 591/外部 → 失敗；經 gateway → 通
+      - check: cross_tenant_isolated           # tenant-a pod 連 tenant-b service → 失敗
+      - check: secret_not_in_image             # image/manifest 掃描無明文 secret
+    behavior:
+      - check: di5_in_cluster                  # data MCP smoke（DI-5 門牌→refused、聚合無座標）於叢集內
+      - check: pii_egress_masked               # PII WASM 於 egress 遮罩（合成 PII 不外洩/不入 mem0）
+    mutation:
+      - desc: "manifest 變異：開直連 egress / 換 latest / 移除 NetworkPolicy → policy 或行為測試須殺"
+gate_deploy:
+  binds_to: "GATE:DEPLOY"
+  steps:
+    - staging 部署（Config Sync）→ 叢集內跑 scripts/deploy_smoke.py（cache-backed）
+    - egress/隔離行為驗證通過
+    - "@gateB BDD 全綠 → 才 sync prod overlay"
+    - prod 漸進釋出 + 監控（北極星/拒答率/p95）
+  on_fail: { policy: "reject | repair", forbidden: implementer_disables_egress_default_deny }
+  final_authority: production_telemetry

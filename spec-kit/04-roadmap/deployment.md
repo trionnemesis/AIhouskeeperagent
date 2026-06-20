@@ -1,6 +1,8 @@
 # 部署步驟（MVP · 一店部署隔離）
 
 > 對應架構「部署隔離（一店一 home）」與 OPS-2。一租戶 = 一組 Hermes home + 一組 Node.js 服務（綁單一 `TENANT_ID`）。
+>
+> 🚀 **GKE 落地**：本檔為平台無關的部署步驟基底；GKE 具體拓樸/網路/IaC/CI-CD 見 [`../06-platform-gke/`](../06-platform-gke/)（CR-2026-007，Autopilot 私有叢集 + Envoy egress gateway + namespace-per-tenant + Cloud SQL/Redis）。
 
 ## 前置
 
