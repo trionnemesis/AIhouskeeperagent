@@ -1,0 +1,32 @@
+change_id: "CR:2026:007"
+intent: GKE 部署規格（Autopilot 私有叢集 + Envoy egress gateway + namespace-per-tenant + Cloud SQL/Redis）
+scope_note: "本輪止於 GATE:SPEC；IaC/manifests 與部署驗證為 Phase 3。"
+
+decisions_confirmed:
+  gateway: "Envoy egress proxy（proxy-wasm 5 filter）+ NetworkPolicy default-deny"
+  tenancy: "namespace-per-tenant（單叢集）"
+  state: "Cloud SQL Postgres + Memorystore Redis（data MCP 遷 Cloud SQL）"
+  cluster: "GKE Autopilot + 私有叢集 + Cloud NAT"
+
+added:                       # 規格物件（Stable ID）
+  - "DEPLOY:GKE:TOPOLOGY"
+  - "DEPLOY:GKE:GATEWAY"     # Envoy egress + egress default-deny
+  - "DEPLOY:GKE:NETSEC"      # 私有叢集/NAT/591·leju 封鎖/Cloud Armor/WI+Secret Manager
+  - "DEPLOY:GKE:STATE"       # Cloud SQL + Memorystore
+  - "DEPLOY:GKE:CICD"        # Artifact Registry + Cloud Build + Config Sync + Kustomize
+  - "DEPLOY:GKE:OBS"         # Managed Prometheus / Logging / Trace / 北極星
+
+modified:
+  - "spec-kit/04-roadmap/deployment.md"   # 交叉引用 06-platform-gke（GKE 落地）
+
+spawns:
+  - "CR-2026-008"            # datastore Postgres backend（data MCP 由 SQLite 遷 Cloud SQL，Phase 3 code CR）
+
+affected:
+  domain_invariants: ["Inv-1", "Inv-3", "Inv-7"]
+  data_invariants: ["DI-1", "DI-4", "DI-5", "DI-7"]
+  nfr: ["SEC-2", "SEC-3", "SEC-4", "SEC-5", "OPS-1", "OPS-3", "PERF-1", "PERF-2", "REL-1", "REL-2", "OBS-1", "OBS-2", "OBS-3", "OBS-4", "COST-3"]
+  patterns: ["Container-first", "IaC", "GitOps"]
+
+breaking_change: false       # 部署層新增；應用契約不變
+gate_status: { spec: done, red: pending, green: pending, vdd: pending, deploy: pending }

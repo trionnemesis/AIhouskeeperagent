@@ -40,6 +40,7 @@
 | [`03-features/`](03-features/) | **BDD**：Gherkin `.feature`（含治理場景）+ cucumber 設定 + step 骨架 | **BDD 行為** |
 | [`04-roadmap/`](04-roadmap/) | 分階段 roadmap + Go/No-Go gates + repo 佈局 + 部署步驟 | 落地計畫 |
 | [`05-data-mcp/`](05-data-mcp/) | **資料 MCP 層**：資料源決策矩陣 + lvr/amenities/company-registry MCP + AI Gateway 合規層（PII/ToolAuthZ/Policy） | 資料取得層 spec |
+| [`06-platform-gke/`](06-platform-gke/) | **GKE 平台部署**：Autopilot 私有叢集 + Envoy egress gateway + namespace-per-tenant + Cloud SQL/Redis（CR-2026-007） | 部署 spec |
 | [`.github/workflows/`](.github/workflows/) | Gate B CI（`@gateB` 必綠才接真實資料） | 合規把關 |
 
 ### 三大交付物速查
