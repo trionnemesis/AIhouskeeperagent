@@ -1,0 +1,31 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: tenant-demo
+  labels:
+    app.kubernetes.io/part-of: hermes-real-estate
+    hermes.io/zone: tenant
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: data-mcp
+  labels:
+    app.kubernetes.io/part-of: hermes-real-estate
+    hermes.io/zone: data
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: gateway
+  labels:
+    app.kubernetes.io/part-of: hermes-real-estate
+    hermes.io/zone: gateway
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: platform
+  labels:
+    app.kubernetes.io/part-of: hermes-real-estate
+    hermes.io/zone: platform

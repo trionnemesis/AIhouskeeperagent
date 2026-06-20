@@ -1,0 +1,85 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: envoy-egress-config
+  namespace: gateway
+  labels:
+    app.kubernetes.io/name: envoy-egress
+    app.kubernetes.io/part-of: hermes-real-estate
+data:
+  # proxy-wasm filter chain placeholder. The 5 WASM filters implement the
+  # gateway-compliance spec (Policy -> PII -> Router -> ToolAuthZ -> RAG).
+  # Real .wasm binaries are mounted from the envoy-wasm-filters volume at /etc/envoy/wasm.
+  envoy.yaml: |
+    admin:
+      address:
+        socket_address: { address: 127.0.0.1, port_value: 9901 }
+    static_resources:
+      listeners:
+        - name: egress_listener
+          address:
+            socket_address: { address: 0.0.0.0, port_value: 10000 }
+          filter_chains:
+            - filters:
+                - name: envoy.filters.network.http_connection_manager
+                  typed_config:
+                    "@type": type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager
+                    stat_prefix: egress_http
+                    route_config:
+                      name: egress_route
+                      virtual_hosts:
+                        - name: egress
+                          domains: ["*"]
+                          routes:
+                            - match: { prefix: "/" }
+                              route: { cluster: dynamic_forward }
+                    http_filters:
+                      # --- proxy-wasm chain (5 filters, placeholders) ---
+                      - name: filter.policy
+                        typed_config:
+                          "@type": type.googleapis.com/envoy.extensions.filters.http.wasm.v3.Wasm
+                          config:
+                            name: policy
+                            vm_config:
+                              runtime: envoy.wasm.runtime.v8
+                              code: { local: { filename: /etc/envoy/wasm/policy.wasm } }
+                      - name: filter.pii
+                        typed_config:
+                          "@type": type.googleapis.com/envoy.extensions.filters.http.wasm.v3.Wasm
+                          config:
+                            name: pii
+                            vm_config:
+                              runtime: envoy.wasm.runtime.v8
+                              code: { local: { filename: /etc/envoy/wasm/pii.wasm } }
+                      - name: filter.router
+                        typed_config:
+                          "@type": type.googleapis.com/envoy.extensions.filters.http.wasm.v3.Wasm
+                          config:
+                            name: router
+                            vm_config:
+                              runtime: envoy.wasm.runtime.v8
+                              code: { local: { filename: /etc/envoy/wasm/router.wasm } }
+                      - name: filter.toolauthz
+                        typed_config:
+                          "@type": type.googleapis.com/envoy.extensions.filters.http.wasm.v3.Wasm
+                          config:
+                            name: toolauthz
+                            vm_config:
+                              runtime: envoy.wasm.runtime.v8
+                              code: { local: { filename: /etc/envoy/wasm/toolauthz.wasm } }
+                      - name: filter.rag
+                        typed_config:
+                          "@type": type.googleapis.com/envoy.extensions.filters.http.wasm.v3.Wasm
+                          config:
+                            name: rag
+                            vm_config:
+                              runtime: envoy.wasm.runtime.v8
+                              code: { local: { filename: /etc/envoy/wasm/rag.wasm } }
+                      - name: envoy.filters.http.router
+                        typed_config:
+                          "@type": type.googleapis.com/envoy.extensions.filters.http.router.v3.Router
+      clusters:
+        - name: dynamic_forward
+          type: ORIGINAL_DST
+          lb_policy: CLUSTER_PROVIDED
+          connect_timeout: 5s

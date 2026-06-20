@@ -1,0 +1,50 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Per-tenant overlay: binds TENANT_ID / HERMES_HOME for the 'tenant-demo'
+# namespace workloads (Inv-1 deployment isolation, OPS-2).
+resources:
+  - ../../base
+
+labels:
+  - pairs:
+      app.kubernetes.io/tenant: tenant-demo
+    includeSelectors: false
+
+patches:
+  # Hermes: pin tenant home + tenant id (per-tenant HERMES_HOME, OPS-2).
+  - target:
+      group: apps
+      version: v1
+      kind: StatefulSet
+      name: hermes
+      namespace: tenant-demo
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/env/0/value
+        value: "tenant-demo"
+      - op: replace
+        path: /spec/template/spec/containers/0/env/1/value
+        value: "/srv/hermes/tenant-demo"
+  # fastapi-edge: bind tenant id.
+  - target:
+      group: apps
+      version: v1
+      kind: Deployment
+      name: fastapi-edge
+      namespace: tenant-demo
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/env/0/value
+        value: "tenant-demo"
+  # domain-mcp: bind tenant id.
+  - target:
+      group: apps
+      version: v1
+      kind: Deployment
+      name: domain-mcp
+      namespace: tenant-demo
+    patch: |-
+      - op: replace
+        path: /spec/template/spec/containers/0/env/0/value
+        value: "tenant-demo"

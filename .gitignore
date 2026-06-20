@@ -28,3 +28,9 @@ __pycache__/
 # 資料 MCP 快取落地（CR-2026-005；ETL 產生，非版控）
 var/
 *.db
+
+# kustomize render 暫存（conftest/kubeconform 用，非版控）
+deploy/_rendered/
+.terraform/
+*.tfstate*
+.terraform.lock.hcl

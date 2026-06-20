@@ -1,0 +1,25 @@
+change_id: "CR:2026:008"
+intent: datastore 由 SQLite 擴為 SQLite + PostgreSQL 雙後端（Cloud SQL；GKE data MCP 多副本前置）
+spawned_by: "CR:2026:007"
+
+added:
+  - "STORE:dialect"          # _dialect/_pp/_ph/_build_insert/_exec_many 封裝
+  - "STORE:pg:schema"        # _PG_SCHEMA（IDENTITY/DOUBLE PRECISION）
+  - "STORE:pg:connect"       # connect() 支援 postgresql:// (psycopg dict_row)
+  - "TEST:store:pg"          # tests/test_store_pg.py（DATABASE_URL 注入，否則 skip）
+
+modified:
+  - "STORE:upsert/query"     # 三 upsert + 查詢改走 dialect 封裝（SQLite 行為不變）
+  - "requirements.txt"       # 加 psycopg[binary]（僅 PG 後端需要）
+
+removed: []
+
+affected:
+  data_invariants: ["DI-5", "DI-7"]   # crime 無座標欄、provenance；行為跨後端一致
+  patterns: ["DI"]                     # connect(url) 注入後端
+
+breaking_change: false       # 簽名不變；SQLite 預設行為不變
+verification:
+  sqlite_regression: "8 既有測試 + smoke + e2e 綠"
+  postgres_realrun: "docker postgres:16 起容器；3 PG 測試綠（去重/DI-5/半徑）"
+  mutation: "PG 去掉 ON CONFLICT → 去重斷言被殺（IntegrityError）"

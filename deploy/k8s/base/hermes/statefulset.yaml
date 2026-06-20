@@ -1,0 +1,82 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: hermes
+  namespace: tenant-demo
+  labels:
+    app.kubernetes.io/name: hermes
+    app.kubernetes.io/part-of: hermes-real-estate
+spec:
+  serviceName: hermes
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: hermes
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: hermes
+        app.kubernetes.io/part-of: hermes-real-estate
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        fsGroup: 1000
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: hermes
+          image: REGION-docker.pkg.dev/PROJECT/hermes/hermes:v0.1.0
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: TENANT_ID
+              value: "tenant-demo"
+            - name: HERMES_HOME
+              value: "/srv/hermes/tenant-demo"
+            # OPS-1: image pinned; Hermes must not float on main.
+            - name: HERMES_PINNED_TAG
+              value: "v0.1.0"
+            - name: MEM0_ENABLED
+              value: "false"
+            - name: MULTITENANCY_MODE
+              value: "deployment"
+            - name: DATABASE_URL
+              valueFrom:
+                secretKeyRef:
+                  name: hermes-runtime
+                  key: DATABASE_URL
+            - name: REDIS_URL
+              valueFrom:
+                secretKeyRef:
+                  name: hermes-runtime
+                  key: REDIS_URL
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+            seccompProfile:
+              type: RuntimeDefault
+          resources:
+            requests:
+              cpu: 250m
+              memory: 512Mi
+            limits:
+              cpu: "1"
+              memory: 1Gi
+          volumeMounts:
+            - name: home
+              mountPath: /srv/hermes/tenant-demo
+  volumeClaimTemplates:
+    - metadata:
+        name: home
+        labels:
+          app.kubernetes.io/name: hermes
+          app.kubernetes.io/part-of: hermes-real-estate
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        resources:
+          requests:
+            storage: 10Gi

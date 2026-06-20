@@ -1,0 +1,121 @@
+# ---------------------------------------------------------------------------
+# tenant-demo: default-deny + DNS + egress ONLY to gateway envoy.
+# No ipBlock 0.0.0.0/0 anywhere here (DI-4: app pods cannot reach internet).
+# ---------------------------------------------------------------------------
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny
+  namespace: tenant-demo
+  labels:
+    app.kubernetes.io/part-of: hermes-real-estate
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-dns
+  namespace: tenant-demo
+  labels:
+    app.kubernetes.io/part-of: hermes-real-estate
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+---
+# App pods: the only non-DNS egress allowed is the gateway envoy (the single
+# non-bypassable egress). namespaceSelector + podSelector, no ipBlock.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-egress-to-gateway
+  namespace: tenant-demo
+  labels:
+    app.kubernetes.io/part-of: hermes-real-estate
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: gateway
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: envoy-egress
+      ports:
+        - protocol: TCP
+          port: 10000
+---
+# App pods may talk to each other within the tenant ns (edge -> hermes ->
+# domain-mcp). Same-ns only; no cross-ns, no ipBlock.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-egress-intra-namespace
+  namespace: tenant-demo
+  labels:
+    app.kubernetes.io/part-of: hermes-real-estate
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - podSelector: {}
+---
+# Ingress: fastapi-edge accepts the LINE webhook from the gateway ns
+# (GKE Gateway API + Cloud Armor front the webhook).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-edge-ingress-from-gateway
+  namespace: tenant-demo
+  labels:
+    app.kubernetes.io/part-of: hermes-real-estate
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: fastapi-edge
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: gateway
+      ports:
+        - protocol: TCP
+          port: 8080
+---
+# Ingress: intra-namespace traffic among tenant workloads
+# (edge -> hermes -> domain-mcp). Same-ns only; cross-tenant stays zero.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-intra-namespace
+  namespace: tenant-demo
+  labels:
+    app.kubernetes.io/part-of: hermes-real-estate
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - podSelector: {}

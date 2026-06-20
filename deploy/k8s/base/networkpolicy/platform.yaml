@@ -1,0 +1,39 @@
+# ---------------------------------------------------------------------------
+# platform: default-deny + DNS. (cloudsql-proxy / observability /
+# external-secrets live here; their GCP egress is granted by dedicated
+# policies out of scope for this base — only default-deny + DNS are mandated.)
+# ---------------------------------------------------------------------------
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny
+  namespace: platform
+  labels:
+    app.kubernetes.io/part-of: hermes-real-estate
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-dns
+  namespace: platform
+  labels:
+    app.kubernetes.io/part-of: hermes-real-estate
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53

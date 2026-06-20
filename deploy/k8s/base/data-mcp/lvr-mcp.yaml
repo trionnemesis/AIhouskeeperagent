@@ -1,0 +1,66 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: lvr-mcp
+  namespace: data-mcp
+  labels:
+    app.kubernetes.io/name: lvr-mcp
+    app.kubernetes.io/part-of: hermes-real-estate
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: lvr-mcp
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: lvr-mcp
+        app.kubernetes.io/part-of: hermes-real-estate
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: lvr-mcp
+          image: REGION-docker.pkg.dev/PROJECT/hermes/lvr-mcp:v0.1.0
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: DATA_MCP_DB
+              valueFrom:
+                secretKeyRef:
+                  name: data-mcp-db
+                  key: DATA_MCP_DB
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+            seccompProfile:
+              type: RuntimeDefault
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: lvr-mcp
+  namespace: data-mcp
+  labels:
+    app.kubernetes.io/name: lvr-mcp
+    app.kubernetes.io/part-of: hermes-real-estate
+spec:
+  selector:
+    app.kubernetes.io/name: lvr-mcp
+  ports:
+    - name: http
+      port: 80
+      targetPort: http

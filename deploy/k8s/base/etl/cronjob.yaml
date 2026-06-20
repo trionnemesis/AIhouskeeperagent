@@ -1,0 +1,52 @@
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: etl-runner
+  namespace: data-mcp
+  labels:
+    app.kubernetes.io/name: etl-runner
+    app.kubernetes.io/part-of: hermes-real-estate
+spec:
+  # plvr 1/11/21 cadence (see data-and-cicd.md ETL CronJob).
+  schedule: "0 6 1,11,21 * *"
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: etl-runner
+            app.kubernetes.io/part-of: hermes-real-estate
+        spec:
+          restartPolicy: Never
+          securityContext:
+            runAsNonRoot: true
+            seccompProfile:
+              type: RuntimeDefault
+          containers:
+            - name: etl-runner
+              image: REGION-docker.pkg.dev/PROJECT/hermes/etl-runner:v0.1.0
+              env:
+                - name: DATA_MCP_DB
+                  valueFrom:
+                    secretKeyRef:
+                      name: data-mcp-db
+                      key: DATA_MCP_DB
+              securityContext:
+                runAsNonRoot: true
+                allowPrivilegeEscalation: false
+                readOnlyRootFilesystem: true
+                capabilities:
+                  drop: [ALL]
+                seccompProfile:
+                  type: RuntimeDefault
+              resources:
+                requests:
+                  cpu: 250m
+                  memory: 256Mi
+                limits:
+                  cpu: "1"
+                  memory: 512Mi

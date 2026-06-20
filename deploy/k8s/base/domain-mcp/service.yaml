@@ -1,0 +1,15 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: domain-mcp
+  namespace: tenant-demo
+  labels:
+    app.kubernetes.io/name: domain-mcp
+    app.kubernetes.io/part-of: hermes-real-estate
+spec:
+  selector:
+    app.kubernetes.io/name: domain-mcp
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
