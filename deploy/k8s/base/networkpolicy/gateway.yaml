@@ -1,0 +1,84 @@
+# ---------------------------------------------------------------------------
+# gateway: default-deny + DNS. The envoy-egress pod is the ONLY pod in the
+# cluster permitted wide-area egress (0.0.0.0/0 via Cloud NAT).
+# ---------------------------------------------------------------------------
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny
+  namespace: gateway
+  labels:
+    app.kubernetes.io/part-of: hermes-real-estate
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-dns
+  namespace: gateway
+  labels:
+    app.kubernetes.io/part-of: hermes-real-estate
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+---
+# THE single broad-egress allowance in the whole cluster: only the envoy
+# egress pod may reach 0.0.0.0/0 (out via Cloud NAT). DI-4.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-egress-internet-envoy-only
+  namespace: gateway
+  labels:
+    app.kubernetes.io/part-of: hermes-real-estate
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: envoy-egress
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+---
+# Ingress to envoy from tenant-demo and data-mcp app pods.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-ingress-from-app-namespaces
+  namespace: gateway
+  labels:
+    app.kubernetes.io/part-of: hermes-real-estate
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: envoy-egress
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: tenant-demo
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: data-mcp
+      ports:
+        - protocol: TCP
+          port: 10000

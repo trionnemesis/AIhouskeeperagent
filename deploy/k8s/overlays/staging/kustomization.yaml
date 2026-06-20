@@ -1,0 +1,66 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Namespaces are fixed by contract (tenant-demo/data-mcp/gateway/platform) and
+# referenced by NetworkPolicies via kubernetes.io/metadata.name -> no namePrefix.
+resources:
+  - ../../base
+
+labels:
+  - pairs:
+      app.kubernetes.io/environment: staging
+    includeSelectors: false
+
+# Pin all component images to the staging tag (no :latest, OPS-1).
+images:
+  - name: REGION-docker.pkg.dev/PROJECT/hermes/envoy-egress
+    newTag: v0.1.0-staging
+  - name: REGION-docker.pkg.dev/PROJECT/hermes/fastapi-edge
+    newTag: v0.1.0-staging
+  - name: REGION-docker.pkg.dev/PROJECT/hermes/hermes
+    newTag: v0.1.0-staging
+  - name: REGION-docker.pkg.dev/PROJECT/hermes/domain-mcp
+    newTag: v0.1.0-staging
+  - name: REGION-docker.pkg.dev/PROJECT/hermes/lvr-mcp
+    newTag: v0.1.0-staging
+  - name: REGION-docker.pkg.dev/PROJECT/hermes/public-safety-mcp
+    newTag: v0.1.0-staging
+  - name: REGION-docker.pkg.dev/PROJECT/hermes/etl-runner
+    newTag: v0.1.0-staging
+
+patches:
+  - target:
+      kind: Deployment
+      name: fastapi-edge
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+  - target:
+      kind: Deployment
+      name: domain-mcp
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+  - target:
+      kind: Deployment
+      name: lvr-mcp
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+  - target:
+      kind: Deployment
+      name: public-safety-mcp
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1
+  - target:
+      kind: Deployment
+      name: envoy-egress
+    patch: |-
+      - op: replace
+        path: /spec/replicas
+        value: 1

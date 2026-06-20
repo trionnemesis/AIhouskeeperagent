@@ -1,0 +1,29 @@
+# 故意違規 manifest — 供 GATE:RED 證明 policy 能抓（Red Evidence）。
+# 預期 conftest 至少 4 個 deny：:latest、runAsRoot、tenant-demo 0.0.0.0/0、缺 default-deny。
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bad-app
+  namespace: tenant-demo
+spec:
+  template:
+    spec:
+      containers:
+        - name: app
+          image: REGION-docker.pkg.dev/PROJECT/hermes/bad:latest   # 違 OPS-1
+          # 無 securityContext.runAsNonRoot → 違 SEC
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: bad-open-egress
+  namespace: tenant-demo            # 非 gateway 卻開 0.0.0.0/0 → 違 DI-4
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+# 注意：此檔未提供任一 default-deny → 違 Inv-1（4 個 app ns 全缺）

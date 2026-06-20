@@ -1,0 +1,29 @@
+change_id: "CR:2026:008"
+quality_profile:
+  id: "QP:DATASTORE:DUAL"
+  note: "雙後端：SQLite 零回歸 + 真實 Postgres 行為一致 + 去重 mutation。"
+gate_red:
+  red_evidence:
+    - check: pg_tests_fail_without_impl   # test_store_pg 在 connect 未支援 postgres 時 import/連線失敗
+gate_green:
+  assertions:
+    sqlite:
+      - check: existing_8_tests_pass      # datastore 既有測試不變
+      - check: smoke_and_e2e_pass         # deploy_smoke + lvr/crime e2e（SQLite）
+    postgres:
+      - check: pg_lvr_dedup_query_provenance
+      - check: pg_crime_no_coord_columns  # information_schema 無 lat/lng（DI-5）
+      - check: pg_traffic_radius_precise  # bbox+haversine 跨後端一致
+  oracle:
+    sqlite: "unittest :memory:"
+    postgres: "docker postgres:16-alpine + DATABASE_URL；unittest"
+gate_vdd:
+  assertions:
+    mutation:
+      - desc: "PG 分支去掉 ON CONFLICT DO NOTHING → 第二次 upsert 觸 UNIQUE → 去重斷言被殺"
+  result: "✅ 已驗（IntegrityError；還原復綠）"
+gate_deploy:
+  steps:
+    - "Cloud SQL 起（CR-007 terraform）→ DATA_MCP_DB=postgresql://... → data MCP 多副本"
+    - "CI 可選起 postgres service 跑 test_store_pg"
+  final_authority: production_telemetry

@@ -3,3 +3,6 @@
 # 純領域/防護邏輯與 ETL parser 用 stdlib（unittest 可零依賴執行）；
 # 僅 server.py 起服務 + GATE:DEPLOY smoke 需 fastmcp。
 fastmcp>=3.4
+# datastore Postgres 後端（CR-2026-008，GKE Cloud SQL）；SQLite 路徑零依賴、不載入此套件。
+psycopg[binary]>=3.2
+

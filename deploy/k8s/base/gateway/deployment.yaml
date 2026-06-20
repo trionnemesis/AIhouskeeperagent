@@ -1,0 +1,64 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: envoy-egress
+  namespace: gateway
+  labels:
+    app.kubernetes.io/name: envoy-egress
+    app.kubernetes.io/part-of: hermes-real-estate
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: envoy-egress
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: envoy-egress
+        app.kubernetes.io/part-of: hermes-real-estate
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: envoy
+          image: REGION-docker.pkg.dev/PROJECT/hermes/envoy-egress:v0.1.0
+          args:
+            - "-c"
+            - "/etc/envoy/envoy.yaml"
+          ports:
+            - name: egress
+              containerPort: 10000
+            - name: admin
+              containerPort: 9901
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop: [ALL]
+            seccompProfile:
+              type: RuntimeDefault
+          resources:
+            requests:
+              cpu: 100m
+              memory: 128Mi
+            limits:
+              cpu: 500m
+              memory: 256Mi
+          volumeMounts:
+            - name: envoy-config
+              mountPath: /etc/envoy/envoy.yaml
+              subPath: envoy.yaml
+              readOnly: true
+            - name: envoy-wasm-filters
+              mountPath: /etc/envoy/wasm
+              readOnly: true
+      volumes:
+        - name: envoy-config
+          configMap:
+            name: envoy-egress-config
+        # proxy-wasm 5-filter binaries placeholder; populated by image/init in real build.
+        - name: envoy-wasm-filters
+          emptyDir: {}

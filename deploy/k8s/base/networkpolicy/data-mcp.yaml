@@ -1,0 +1,85 @@
+# ---------------------------------------------------------------------------
+# data-mcp: default-deny + DNS + egress ONLY to gateway envoy;
+# ingress ONLY from gateway ns. No ipBlock 0.0.0.0/0 (DI-4).
+# ---------------------------------------------------------------------------
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny
+  namespace: data-mcp
+  labels:
+    app.kubernetes.io/part-of: hermes-real-estate
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-dns
+  namespace: data-mcp
+  labels:
+    app.kubernetes.io/part-of: hermes-real-estate
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+        - protocol: TCP
+          port: 53
+---
+# data MCP egress: external fetches (gov sources) must go through the gateway
+# envoy. namespaceSelector + podSelector, no ipBlock.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-egress-to-gateway
+  namespace: data-mcp
+  labels:
+    app.kubernetes.io/part-of: hermes-real-estate
+spec:
+  podSelector: {}
+  policyTypes:
+    - Egress
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: gateway
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: envoy-egress
+      ports:
+        - protocol: TCP
+          port: 10000
+---
+# Ingress: data MCP only accepts connections originating from the gateway ns
+# (tenant scope enforced by gateway ToolAuthZ + RAG, not by data MCP itself).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-ingress-from-gateway
+  namespace: data-mcp
+  labels:
+    app.kubernetes.io/part-of: hermes-real-estate
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: gateway
+      ports:
+        - protocol: TCP
+          port: 8080
