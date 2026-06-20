@@ -10,7 +10,7 @@ import sys
 import tempfile
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-for p in ("packages/datastore", "packages/mcp-lvr", "packages/mcp-public-safety"):
+for p in ("packages/govnet", "packages/datastore", "packages/mcp-lvr", "packages/mcp-public-safety"):
     sys.path.insert(0, str(ROOT / p))
 
 # 用臨時 db，import server 前設好環境（server 於 import 時讀 DATA_MCP_DB 預設）
@@ -42,6 +42,11 @@ def seed():
     store.upsert_crime_area_stats(conn, "信義區",
                                   [{"category": "竊盜", "count": 5, "period": "115"}],
                                   source="內政部警政署", as_of="2026", ingested_at=_TS)
+    store.upsert_traffic_accidents(conn, [
+        {"lat": 25.000, "lng": 121.500, "severity": "A1", "occurred_at": "2026-07-01"},
+        {"lat": 25.003, "lng": 121.500, "severity": "A2", "occurred_at": "2026-07-02"},
+        {"lat": 25.050, "lng": 121.500, "severity": "A2", "occurred_at": "2026-07-03"},  # ~5.5km 外
+    ], source="內政部警政署", as_of="2026", ingested_at=_TS)
     conn.close()
 
 
@@ -75,8 +80,9 @@ async def main():
          and len(d.get("stats", [])) == 1, "快取區域級→provided"),
         ("area_crime_stats_tool", {"scope": {"address": "信義路五段7號"}},
          lambda d: d.get("outcome") == "refused", "門牌級→refused(DI-5)"),
-        ("traffic_accident_density_tool", {"points": [{"severity": "A2"}], "lat": 25.0, "lng": 121.5, "radius_m": 500},
-         lambda d: d.get("outcome") == "provided" and "lat" not in str(d.get("density")), "聚合→無座標(DI-5)"),
+        ("traffic_accident_density_tool", {"lat": 25.0, "lng": 121.5, "radius_m": 500},
+         lambda d: d.get("outcome") == "provided" and d.get("density", {}).get("total_n") == 2
+         and "lat" not in str(d.get("density")), "快取半徑內 2 點聚合→無座標(DI-5)"),
     ])
     print("\n✅ GATE:DEPLOY smoke 通過：兩 server 可啟動、cache-backed 工具可呼叫且行為符 spec（含 Inv-5 / DI-5 拒答）。")
 

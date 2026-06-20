@@ -10,7 +10,7 @@ import pathlib
 import sys
 
 ROOT = pathlib.Path(__file__).resolve().parent.parent
-for p in ("packages/datastore", "packages/mcp-lvr", "packages/mcp-public-safety"):
+for p in ("packages/govnet", "packages/datastore", "packages/mcp-lvr", "packages/mcp-public-safety"):
     sys.path.insert(0, str(ROOT / p))
 os.environ.setdefault("DATA_MCP_DB", str(ROOT / "var" / "data_mcp.db"))
 

@@ -1,0 +1,38 @@
+change_id: "CR:2026:006"
+intent: public-safety 完整落地（traffic cache-backed + 犯罪全行政區批次）+ ETL 韌性 + govnet 抽共用
+
+added:
+  - "PUBSAFE:TRAFFIC:parse"     # parse_accidents_csv（純，A1/A2 by param）
+  - "PUBSAFE:TRAFFIC:store"     # upsert_traffic_accidents + query_accident_points_near（bbox+haversine）
+  - "PUBSAFE:CRIME:all"         # aggregate_crime_all（全行政區批次，純）
+  - "DEPLOY:RUN:traffic"        # etl_run traffic 子命令
+  - "GOVNET:tls"                # build_secure_ssl_context（共用）
+  - "GOVNET:retry"             # with_retry（共用）
+
+modified:
+  - "MCP:pubsafe:server"        # traffic_accident_density_tool 改 cache-backed（簽名去 points）
+  - "ETL:pubsafe:livefetch"     # live_fetch_crime 改 govnet 安全 context + UA + retry（opdadm 同缺 SKI）
+  - "DEPLOY:RUN:etl"            # crime 省略 --region → 全行政區批次
+  - "MCP:lvr:ingest"            # build_secure_ssl_context/with_retry 移至 govnet（改 import）
+  - "GATE:DEPLOY:smoke"         # seed traffic → traffic tool cache-backed
+
+removed:
+  - "ETL:lvr:tls_local"         # lvr_mcp.ingest 內的 TLS/retry 定義（移至 govnet）
+
+refactor:
+  note: "TLS/retry 抽 govnet — 由 opdadm.moi.gov.tw 同缺 SKI 證明為跨來源共用基建；lvr 測試之 TLS/retry 案例隨之移至 govnet/tests。"
+
+affected:
+  domain_invariants:
+    - "DI-5"    # traffic 點位入庫但 tool 僅回聚合；crime 維持鄉鎮市區
+    - "DI-7"    # traffic/crime upsert 記 provenance
+    - "Inv-4"   # 事故 occurred_at（ROC→ISO）
+  security:
+    - "TLS-1"   # 共用 context 仍 CERT_REQUIRED + check_hostname
+  patterns: ["DI"]
+  sources:
+    - "data.gov.tw 14200 犯罪資料（opdadm.moi.gov.tw，逐縣市 CSV）"
+    - "NPA A1/A2 道路交通事故（含經緯度；A1/A2 分檔，operator 設定 URL）"
+
+breaking_change: true   # traffic_accident_density_tool 去 points 參數（改 lat/lng/radius_m）
+migration: "呼叫端改傳 lat/lng/radius_m；事故點由 etl_run traffic 預先落地。"

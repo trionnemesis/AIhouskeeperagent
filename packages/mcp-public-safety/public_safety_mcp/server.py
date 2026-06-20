@@ -18,8 +18,14 @@ _DB = os.environ.get("DATA_MCP_DB", "var/data_mcp.db")
 
 @mcp.tool()
 def traffic_accident_density_tool(
-    points: list[dict], lat: float, lng: float, radius_m: float, min_n: int = 1
+    lat: float, lng: float, radius_m: float, min_n: int = 1
 ) -> dict:
+    """讀快取半徑內事故點 → 聚合密度（DI-5：僅回密度，不回個別點）。"""
+    conn = store.connect(_DB)
+    try:
+        points = store.query_accident_points_near(conn, lat, lng, radius_m)
+    finally:
+        conn.close()
     return traffic_accident_density(points, lat, lng, radius_m, min_n)
 
 

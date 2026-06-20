@@ -71,5 +71,36 @@ class TestCrimeAreaStats(unittest.TestCase):
         self.assertNotIn("lng", cols)
 
 
+class TestTrafficAccidents(unittest.TestCase):
+    # 中心 (25.000, 121.500)；P1 同點(in)、P2 ~333m(in)、P3 ~5.5km(bbox 即排除)、
+    # P4 角點 ~600m：在 500m bbox 內但半徑外 → 只有 haversine 能排除（守住精篩）。
+    POINTS = [
+        {"lat": 25.000, "lng": 121.500, "severity": "A1", "occurred_at": "2026-07-01"},
+        {"lat": 25.003, "lng": 121.500, "severity": "A2", "occurred_at": "2026-07-02"},
+        {"lat": 25.050, "lng": 121.500, "severity": "A2", "occurred_at": "2026-07-03"},
+        {"lat": 25.004, "lng": 121.504, "severity": "A2", "occurred_at": "2026-07-04"},
+    ]
+
+    def test_query_points_within_radius_only(self):
+        conn = _conn()
+        store.upsert_traffic_accidents(conn, self.POINTS, source="內政部警政署",
+                                       as_of="2026", ingested_at=_TS)
+        near = store.query_accident_points_near(conn, 25.000, 121.500, 500)
+        self.assertEqual(len(near), 2)          # P3(bbox外) + P4(bbox內半徑外) 皆排除
+        sev = sorted(p["severity"] for p in near)
+        self.assertEqual(sev, ["A1", "A2"])
+
+    def test_wider_radius_includes_all(self):
+        conn = _conn()
+        store.upsert_traffic_accidents(conn, self.POINTS, source="s", as_of="2026", ingested_at=_TS)
+        self.assertEqual(len(store.query_accident_points_near(conn, 25.000, 121.500, 10000)), 4)
+
+    def test_dedup_idempotent(self):
+        conn = _conn()
+        store.upsert_traffic_accidents(conn, self.POINTS, source="s", as_of="2026", ingested_at=_TS)
+        store.upsert_traffic_accidents(conn, self.POINTS, source="s", as_of="2026", ingested_at=_TS)
+        self.assertEqual(len(store.query_accident_points_near(conn, 25.000, 121.500, 10000)), 4)
+
+
 if __name__ == "__main__":
     unittest.main()
