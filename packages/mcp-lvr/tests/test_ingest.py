@@ -1,8 +1,9 @@
 import io
+import ssl
 import unittest
 import zipfile
 
-from lvr_mcp.ingest import roc_to_iso, parse_lvr_csv, ingest_lvr
+from lvr_mcp.ingest import roc_to_iso, parse_lvr_csv, ingest_lvr, build_secure_ssl_context
 
 
 def _row(district, target, rocdate, area, total, unitsqm, parking):
@@ -55,6 +56,24 @@ class TestIngestDI(unittest.TestCase):
         rows = ingest_lvr(fake_fetcher, "115S1", ["a_lvr_land_a.csv"])
         self.assertEqual(len(rows), 2)
         self.assertEqual(rows[0]["district"], "信義區")
+
+
+class TestSecureContext(unittest.TestCase):
+    """REQ:DEPLOY:TLS — plvr 憑證缺 SKI，只關閉 X509_STRICT 結構檢查；
+    密碼學驗證（信任鏈/到期/hostname）必須完整保留。Red Evidence：
+    任何把 verify_mode 改 CERT_NONE 或 check_hostname=False 的變異須讓本測試失敗。"""
+
+    def test_verification_stays_on(self):
+        ctx = build_secure_ssl_context()
+        self.assertEqual(ctx.verify_mode, ssl.CERT_REQUIRED)
+        self.assertTrue(ctx.check_hostname)
+
+    def test_only_strict_flag_relaxed(self):
+        ctx = build_secure_ssl_context()
+        self.assertFalse(ctx.verify_flags & ssl.VERIFY_X509_STRICT)  # 結構檢查放寬
+        # 其餘預設驗證旗標不得被一併清掉
+        default = ssl.create_default_context().verify_flags
+        self.assertTrue(ctx.verify_flags & (default & ~ssl.VERIFY_X509_STRICT))
 
 
 if __name__ == "__main__":

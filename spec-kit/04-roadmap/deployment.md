@@ -28,3 +28,40 @@
 - Hermes 升級：獨立分支檢出新 tag → 跑 LINE 協定回歸 + 本 spec BDD → 綠燈才換版（OPS-1）。
 - 監控：每租戶 token/Push 用量（COST-3/OBS-1，來源 `outbound_messages`）、錯價回報數（北極星）、p95（PERF）。
 - 規模化（轉 `MULTITENANCY_MODE=app_level`）：見架構文件「部署隔離 vs 應用層多租戶」對照表。
+
+## 資料 MCP 部署（CR-2026-005 部署硬化）
+
+> 對應 [`../05-data-mcp/changes/CR-2026-005-deploy-hardening/`](../05-data-mcp/changes/CR-2026-005-deploy-hardening/)。MCP server 為 cache-backed：先 ETL 落地、再起服務。
+
+**環境變數**：`DATA_MCP_DB`（快取 SQLite 路徑，預設 `<repo>/var/data_mcp.db`）。
+
+**1. ETL 落地（資料先行）**
+```bash
+# plvr 行情（省略 --season 則自動抓 本季+上季 校正，DI-9）
+python scripts/etl_run.py lvr  --county A_lvr_land_a.csv [--season 115S2]
+# 犯罪區域統計（DI-5 區域級）
+python scripts/etl_run.py crime --url <data.gov.tw CSV> --county 新竹縣 --region 湖口鄉
+```
+
+**2. 起 MCP server（`mcp.run()`）**
+```bash
+python scripts/serve.py lvr            # lvr-mcp
+python scripts/serve.py public-safety  # public-safety-mcp
+```
+
+**3. 排程（plvr 每旬發布 1/11/21）**
+```cron
+# 每月 1/11/21 06:00 跑 ETL（next_publication_date 同此節奏）
+0 6 1,11,21 * * cd /srv/hermes && python scripts/etl_run.py lvr --county A_lvr_land_a.csv >> var/etl.log 2>&1
+```
+- 新鮮度監控：`schedule.is_stale(data_as_of, today, max_age_days)` → 超齡告警觸發補抓（DI-9）。
+
+**4. TLS（plvr 憑證缺 SKI）**
+- `lvr_mcp.ingest.build_secure_ssl_context()`：僅清 OpenSSL 3.x 的 `VERIFY_X509_STRICT`，**保留** `CERT_REQUIRED` + `check_hostname`。**禁** `CERT_NONE` / 關 hostname（安全紅線 TLS-1）。
+
+**5. GATE:DEPLOY smoke**
+```bash
+.venv/bin/python scripts/deploy_smoke.py   # 兩 server 啟動 + cache 工具 + Inv-5/DI-5 拒答
+```
+
+> 部署形態說明：此處 SQLite 為單機/MVP 落地（對應 erd.dbml 之 `lvr_data_mcp` schema 子集）；規模化時改 Postgres（erd.dbml 為 PostgreSQL，欄位一致），ETL/查詢介面不變。

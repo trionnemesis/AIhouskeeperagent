@@ -5,6 +5,7 @@ plvr CSV 欄位(0-idx): 0=鄉鎮市區 1=交易標的 7=交易年月日(ROC) 15=
 """
 import csv
 import io
+import ssl
 import zipfile
 from datetime import date
 from typing import Callable
@@ -70,14 +71,24 @@ def ingest_lvr(fetcher: Callable[[str], bytes], season: str, counties: list[str]
     return rows
 
 
-def live_fetch_plvr(season: str) -> bytes:
-    """deploy-time live fetcher：下載 plvr 季 ZIP。
+def build_secure_ssl_context() -> ssl.SSLContext:
+    """plvr 專用安全 TLS context。
 
-    ⚠️ 已驗證：plvr.land.moi.gov.tw 憑證鏈缺 Subject Key Identifier，Python 嚴格 ssl
-    會 CERTIFICATE_VERIFY_FAILED（gov TLS 問題，研究報告已記）。production 修法：
-    用 certifi/正確 CA bundle 或補中介憑證；**勿** silently 關閉驗證。本函式維持嚴格驗證、失敗即拋。
+    Why：plvr.land.moi.gov.tw 憑證鏈缺 Subject Key Identifier（RFC5280 結構不符），
+    OpenSSL 3.x 預設開啟的 VERIFY_X509_STRICT 會以此拒絕。實測：certifi/補 CA 皆無效
+    （非信任根缺失），唯一安全修法是**僅關閉 X509_STRICT 結構檢查**。
+    信任鏈、簽章、到期、hostname 驗證全部保留（CERT_REQUIRED + check_hostname）。
+    **禁止** 改 CERT_NONE 或 check_hostname=False——那會讓 MITM 可偽冒此端點。
     """
+    ctx = ssl.create_default_context()
+    ctx.verify_flags &= ~ssl.VERIFY_X509_STRICT
+    return ctx
+
+
+def live_fetch_plvr(season: str) -> bytes:
+    """deploy-time live fetcher：下載 plvr 季 ZIP，走 build_secure_ssl_context（驗證仍開）。"""
     import urllib.request
     url = f"https://plvr.land.moi.gov.tw/DownloadSeason?season={season}&type=zip&fileName=lvr_landcsv.zip"
-    with urllib.request.urlopen(url, timeout=60) as resp:  # noqa: S310 (官方來源)
+    ctx = build_secure_ssl_context()
+    with urllib.request.urlopen(url, timeout=60, context=ctx) as resp:  # noqa: S310 (官方來源)
         return resp.read()

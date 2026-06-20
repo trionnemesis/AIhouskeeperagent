@@ -1,0 +1,33 @@
+change_id: "CR:2026:005"
+quality_profile:
+  id: "QP:DEPLOY:HARDENING"
+  note: "部署硬化；重安全不可繞過 + 落地冪等 + 真實 e2e。"
+gate_vdd:
+  binds_to: "GATE:VDD"
+  trigger: { when: "post-Green AND pre-Deploy" }
+  preconditions: [functional_tests_passing, red_evidence_present]
+  assertions:
+    security:
+      - check: tls_verification_never_disabled   # CERT_REQUIRED + check_hostname 恆真（TLS-1）
+      - check: only_x509_strict_relaxed          # 其餘預設驗證旗標保留
+    correctness:
+      - check: next_publication_boundary         # 旬/月/年交界 + 發布日當天嚴格大於
+      - check: freshness_threshold               # is_stale 邊界（等於上限不算過期）
+      - check: season_quarter_mapping            # 日期→民國年S季
+      - check: store_dedup_idempotent            # 重複 upsert 不重複落地
+      - check: store_provenance_recorded         # DI-7 每批落地記溯源
+      - check: crime_schema_no_coords            # DI-5 schema 無 lat/lng 欄
+    real_run:
+      - check: plvr_secure_download              # 安全 context 真實下載 plvr（無 SSL 錯）
+      - check: e2e_ingest_to_query               # 落地→server cache-backed 查詢 provided
+      - check: deploy_smoke_cache_backed         # 兩 server 啟動 + cache 工具 + Inv-5/DI-5 拒答
+    mutation:
+      - metric: mutation_score
+        condition: ">= M_threshold"
+  oracle:
+    security: "ssl context 旗標斷言 + 反向控制（hostname mismatch 仍拒）"
+    correctness: "unit asserts（純函式 + :memory: sqlite）"
+    real_run: "live plvr download + 落地筆數 + Client 呼叫 outcome"
+    mutation: "manual cp+diff（+清 __pycache__）"
+  on_fail: { policy: "reject | repair", forbidden: implementer_agent_disables_tls_verify }
+  final_authority: production_telemetry

@@ -24,3 +24,7 @@ __pycache__/
 
 # venv
 .venv/
+
+# 資料 MCP 快取落地（CR-2026-005；ETL 產生，非版控）
+var/
+*.db
