@@ -1,0 +1,64 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+    branches: [master]
+
+jobs:
+  python-tests:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: hermes
+          POSTGRES_PASSWORD: pg
+          POSTGRES_DB: data_mcp
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U hermes -d data_mcp"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install deps (fastmcp + psycopg)
+        run: pip install -r requirements.txt
+      - name: govnet
+        run: cd packages/govnet && PYTHONPATH=. python -m unittest discover -s tests
+      - name: mcp-lvr
+        run: cd packages/mcp-lvr && PYTHONPATH=.:../govnet python -m unittest discover -s tests
+      - name: mcp-public-safety
+        run: cd packages/mcp-public-safety && PYTHONPATH=.:../govnet python -m unittest discover -s tests
+      - name: datastore (sqlite + postgres)
+        env:
+          DATABASE_URL: postgresql://hermes:pg@localhost:5432/data_mcp
+        run: cd packages/datastore && PYTHONPATH=. python -m unittest discover -s tests
+      - name: GATE:DEPLOY smoke
+        run: python scripts/deploy_smoke.py
+
+  node-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22" # 22.18+ 內建 TS type-stripping，node --test 直接跑 .test.ts
+      - name: scope-helper
+        run: cd shared/scope-helper && node --test
+      - name: tw-utils
+        run: cd shared/tw-utils && node --test
+
+  manifest-gate:
+    runs-on: ubuntu-latest # ubuntu runner 內建 docker，verify.sh 以容器跑 conftest/kubeconform
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install kustomize
+        run: |
+          curl -s "https://raw.githubusercontent.com/kubernetes-sigs/kustomize/master/hack/install_kustomize.sh" | bash
+          sudo mv kustomize /usr/local/bin/
+      - name: Manifest gate (kustomize + kubeconform + conftest RED/GREEN)
+        run: bash deploy/verify.sh
