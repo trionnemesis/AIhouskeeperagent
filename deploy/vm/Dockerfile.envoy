@@ -1,0 +1,5 @@
+# Envoy egress forward-proxy。build context = deploy/vm/envoy。
+FROM envoyproxy/envoy:v1.31-latest
+COPY envoy/envoy.yaml /etc/envoy/envoy.yaml
+EXPOSE 3128 9901
+CMD ["envoy", "-c", "/etc/envoy/envoy.yaml", "--service-cluster", "egress"]

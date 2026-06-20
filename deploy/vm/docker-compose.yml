@@ -1,0 +1,115 @@
+# MVP VM 部署（一店一 VM = spec 的「部署隔離」）。
+# 出口隔離（DI-4）：app 全在 internal-only 的 appnet（無對外）；唯 envoy(出向)/caddy(入向) 跨 edgenet。
+# app 對外一律走 envoy 代理（HTTPS_PROXY）。對應 spec-kit/06-platform-gke/adr-001-vm-for-mvp.md。
+# 預設 profile = 資料層；--profile full 起 hermes/edge/envoy/caddy 全套。值經 .env 注入（不入版控）。
+name: hermes-mvp
+
+networks:
+  appnet:
+    internal: true
+  edgenet: {}
+
+volumes:
+  pgdata: {}
+  redisdata: {}
+  hermeshome: {}
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    networks: [appnet]
+    environment:
+      POSTGRES_USER: ${PG_USER}
+      POSTGRES_PASSWORD: ${PG_PASSWORD}
+      POSTGRES_DB: data_mcp
+    volumes: [pgdata:/var/lib/postgresql/data]
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${PG_USER} -d data_mcp"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    networks: [appnet]
+    command: ["redis-server", "--requirepass", "${REDIS_PASSWORD}", "--appendonly", "yes"]
+    volumes: [redisdata:/data]
+    restart: unless-stopped
+
+  lvr-mcp: # 本 repo 真實資料層
+    build: { context: ../.., dockerfile: deploy/vm/Dockerfile.data-mcp }
+    image: hermes/data-mcp:v0.1.0
+    command: ["lvr"]
+    networks: [appnet]
+    environment:
+      DATA_MCP_DB: postgresql://${PG_USER}:${PG_PASSWORD}@postgres:5432/data_mcp
+      HTTPS_PROXY: http://envoy-egress:3128
+      HTTP_PROXY: http://envoy-egress:3128
+    depends_on: { postgres: { condition: service_healthy } }
+    restart: unless-stopped
+
+  public-safety-mcp:
+    image: hermes/data-mcp:v0.1.0
+    command: ["public-safety"]
+    networks: [appnet]
+    environment:
+      DATA_MCP_DB: postgresql://${PG_USER}:${PG_PASSWORD}@postgres:5432/data_mcp
+      HTTPS_PROXY: http://envoy-egress:3128
+      HTTP_PROXY: http://envoy-egress:3128
+    depends_on: { postgres: { condition: service_healthy } }
+    restart: unless-stopped
+
+  # ── full profile：app 層（edge/envoy 為最小真實版；hermes/domain-mcp 為標示 stub）──
+  envoy-egress: # 唯一出向（forward proxy；591/leju 黑名單；proxy-wasm 5 filter 待補）
+    build: { context: ., dockerfile: Dockerfile.envoy }
+    image: hermes/envoy-egress:v0.1.0
+    networks: [appnet, edgenet]
+    restart: unless-stopped
+    profiles: ["full"]
+
+  fastapi-edge: # LINE webhook HMAC 終結（SEC-4）
+    build: { context: ., dockerfile: Dockerfile.edge }
+    image: hermes/fastapi-edge:v0.1.0
+    networks: [appnet]
+    environment:
+      LINE_CHANNEL_SECRET: ${LINE_CHANNEL_SECRET}
+      LINE_CHANNEL_ACCESS_TOKEN: ${LINE_CHANNEL_ACCESS_TOKEN}
+    restart: unless-stopped
+    profiles: ["full"]
+
+  hermes: # STUB（待上游 pinned build）
+    build: { context: ., dockerfile: Dockerfile.stub }
+    image: hermes/stub:v0.1.0
+    networks: [appnet]
+    environment:
+      STUB_NAME: hermes
+      PORT: "8646"
+      TENANT_ID: ${TENANT_ID}
+      HERMES_HOME: /srv/hermes/${TENANT_ID}
+      MEM0_ENABLED: "false"
+      MULTITENANCY_MODE: deployment
+    volumes: [hermeshome:/srv/hermes]
+    restart: unless-stopped
+    profiles: ["full"]
+
+  domain-mcp: # STUB（待 C4-C9 領域實作）
+    build: { context: ., dockerfile: Dockerfile.stub }
+    image: hermes/stub:v0.1.0
+    networks: [appnet]
+    environment:
+      STUB_NAME: domain-mcp
+      PORT: "8080"
+    restart: unless-stopped
+    profiles: ["full"]
+
+  caddy: # 入向 TLS（LINE webhook）→ fastapi-edge
+    image: caddy:2-alpine
+    networks: [edgenet, appnet]
+    ports: ["443:443", "80:80"]
+    environment:
+      WEBHOOK_DOMAIN: ${WEBHOOK_DOMAIN}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+    restart: unless-stopped
+    profiles: ["full"]

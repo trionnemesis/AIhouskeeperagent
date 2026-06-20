@@ -13,6 +13,8 @@
 
 > MVP 先**單租戶**落地（商業 Gate A 未驗證前不鋪多租戶）；namespace-per-tenant 模型確保平滑擴增。`MULTITENANCY_MODE=deployment`、`MEM0_ENABLED=false`（至 Gate B）續用（[configuration](../02-spec/configuration.md)）。
 
+> 🔁 **方向修正（2026-06-20，[ADR-001](adr-001-vm-for-mvp.md)）**：**MVP 部署載體改為單台 GCE VM + docker-compose**（[`../../deploy/vm/`](../../deploy/vm/)，~US$30–55/月）；本區段的 GKE 堆疊**降級為規模化（Gate A 後）目標**，image 不變、可平滑遷移。
+
 ## 檔案
 
 | 檔 | 內容 |

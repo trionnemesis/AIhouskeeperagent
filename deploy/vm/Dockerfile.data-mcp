@@ -1,0 +1,22 @@
+# 本 repo 真實資料層（govnet + datastore + lvr/public-safety MCP）打包成單一 image。
+# build context = repo 根；用法見 deploy/vm/docker-compose.yml（command: lvr | public-safety）。
+FROM python:3.13-slim
+
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install --no-cache-dir -r requirements.txt
+
+# 攤平 packages 到 /app（PYTHONPATH=/app）→ import lvr_mcp / public_safety_mcp / datastore / govnet 皆可。
+COPY packages/govnet/govnet ./govnet
+COPY packages/datastore/datastore ./datastore
+COPY packages/mcp-lvr/lvr_mcp ./lvr_mcp
+COPY packages/mcp-public-safety/public_safety_mcp ./public_safety_mcp
+COPY scripts/serve.py scripts/etl_run.py ./scripts/
+
+ENV PYTHONPATH=/app
+RUN useradd -u 10001 -m app && chown -R app /app
+USER 10001
+
+# serve.py 讀 DATA_MCP_DB（compose 注入 postgresql://...）；arg = lvr | public-safety
+ENTRYPOINT ["python", "scripts/serve.py"]
+CMD ["lvr"]

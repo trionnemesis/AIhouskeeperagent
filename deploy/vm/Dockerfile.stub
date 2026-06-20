@@ -1,0 +1,8 @@
+# MVP 佔位 stub（hermes / domain-mcp）。build context = deploy/vm/stubs。
+# 明確標示為 scaffolding：hermes 待上游 pinned build、domain-mcp 待 C4-C9 領域實作。
+FROM python:3.13-slim
+WORKDIR /app
+COPY stubs/stub.py .
+RUN useradd -u 10001 -m app
+USER 10001
+ENTRYPOINT ["python", "stub.py"]
