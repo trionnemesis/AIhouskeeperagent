@@ -32,3 +32,4 @@ DEPLOY:RUN:etl/serve  +  MCP:lvr/pubsafe:server (cache-backed) + GATE:DEPLOY:smo
 ```
 
 > 收尾 [CR-2026-004](../CR-2026-004-real-ingest/gates.md) `GATE:DEPLOY ⏳` 三項（排程 / 新鮮度+重試 / 快取落地）。
+> **後續重構**：`build_secure_ssl_context` + `with_retry` 於 [CR-2026-006](../CR-2026-006-pubsafe-complete/gates.md) 抽至 `packages/govnet`（opdadm.moi.gov.tw 同缺 SKI，證明跨來源共用）；本 CR 的 TLS/retry 測試案例隨之移至 `govnet/tests`。

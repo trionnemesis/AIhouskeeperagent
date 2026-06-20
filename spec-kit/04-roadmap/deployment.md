@@ -39,9 +39,12 @@
 ```bash
 # plvr 行情（省略 --season 則自動抓 本季+上季 校正，DI-9）
 python scripts/etl_run.py lvr  --county A_lvr_land_a.csv [--season 115S2]
-# 犯罪區域統計（DI-5 區域級）
-python scripts/etl_run.py crime --url <data.gov.tw CSV> --county 新竹縣 --region 湖口鄉
+# 犯罪區域統計（DI-5 區域級）；省略 --county/--region → 全行政區批次落地（CR-006）
+python scripts/etl_run.py crime --url <data.gov.tw CSV> [--county 新竹縣 --region 湖口鄉]
+# A1/A2 事故點位（CR-006）；點位入庫供周邊密度聚合，tool 不回個別點（DI-5）
+python scripts/etl_run.py traffic --url <NPA A1/A2 CSV> --severity A1
 ```
+> 政府源（plvr / opdadm.moi.gov.tw）憑證皆缺 SKI 且 WAF 擋預設 UA → fetcher 統一走 `packages/govnet`（安全 context + 瀏覽器 UA + 有界重試）。
 
 **2. 起 MCP server（`mcp.run()`）**
 ```bash

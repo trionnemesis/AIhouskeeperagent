@@ -1,0 +1,35 @@
+change_id: "CR:2026:006"
+quality_profile:
+  id: "QP:DEPLOY:HARDENING"
+  note: "延用 CR-005；重 DI-5 不外洩 + 落地冪等 + 真實 e2e。"
+gate_vdd:
+  binds_to: "GATE:VDD"
+  trigger: { when: "post-Green AND pre-Deploy" }
+  preconditions: [functional_tests_passing, red_evidence_present]
+  assertions:
+    security:
+      - check: tls_verification_never_disabled   # govnet context CERT_REQUIRED+check_hostname（TLS-1）
+    correctness:
+      - check: radius_filter_precise             # bbox 內半徑外角點須排除（haversine 精篩）
+      - check: bbox_is_superset                  # 經度 delta 用 cos(lat) 放寬，不誤刪
+      - check: crime_all_groups_by_region        # 全行政區批次按 (county,region) 分組
+      - check: accidents_skip_bad_coords         # 缺/零座標列略過
+      - check: retry_bounded_backoff             # 有界重試 + 指數退避（sleeper 注入）
+    di5:
+      - check: traffic_tool_aggregate_only       # tool 輸出僅 density，無個別點/座標
+      - check: crime_area_no_coords_columns      # crime schema 無 lat/lng
+    real_run:
+      - check: crime_batch_all_districts         # 真實 14200 → 全行政區落地（多區）
+      - check: gov_fetcher_secure                # opdadm 安全 context 下載成功（無 SSL 錯）
+      - check: deploy_smoke_traffic_cache        # smoke：traffic cache-backed 半徑+DI-5
+    mutation:
+      - metric: mutation_score
+        condition: ">= M_threshold"
+  oracle:
+    security: "ssl context 旗標斷言"
+    correctness: "unit asserts（:memory: sqlite + fixture）"
+    di5: "tool 輸出鍵檢查（無 lat/lng/points）"
+    real_run: "live opdadm download + 落地行政區數 + Client outcome"
+    mutation: "manual cp+diff（+清 __pycache__）：M5 haversine / M6 分組 / M7 跳列 / M8 retry"
+  on_fail: { policy: "reject | repair", forbidden: implementer_agent_disables_tls_or_di5 }
+  final_authority: production_telemetry

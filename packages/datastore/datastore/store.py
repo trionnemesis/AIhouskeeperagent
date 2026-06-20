@@ -8,6 +8,7 @@
 - DI-5：crime_area_stats 刻意**無 lat/lng 欄**（區域級封頂，schema 即護欄）。
 追溯: spec-kit/05-data-mcp/erd.dbml、changes/CR-2026-005-deploy-hardening/
 """
+import math
 import sqlite3
 from pathlib import Path
 
@@ -43,6 +44,19 @@ CREATE TABLE IF NOT EXISTS crime_area_stats (
   UNIQUE (district, category, period)
 );
 CREATE INDEX IF NOT EXISTS ix_crime_district ON crime_area_stats (district, category);
+
+CREATE TABLE IF NOT EXISTS traffic_accidents (
+  id          INTEGER PRIMARY KEY AUTOINCREMENT,
+  lat         REAL NOT NULL,               -- 點位存庫供「周邊密度聚合」；DI-5：tool 不得回個別點
+  lng         REAL NOT NULL,
+  severity    TEXT NOT NULL,               -- A1|A2
+  occurred_at TEXT NOT NULL,               -- ISO；Inv-4 TimestampGuard
+  source      TEXT NOT NULL,
+  as_of       TEXT NOT NULL,
+  ingested_at TEXT NOT NULL,
+  UNIQUE (lat, lng, severity, occurred_at)
+);
+CREATE INDEX IF NOT EXISTS ix_acc_latlng ON traffic_accidents (lat, lng);
 
 CREATE TABLE IF NOT EXISTS provenance (
   id          INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -166,3 +180,54 @@ def query_crime_stats(conn: sqlite3.Connection, district: str) -> list[dict]:
         (district,),
     )
     return [dict(r) for r in cur.fetchall()]
+
+
+def _haversine_m(lat1: float, lng1: float, lat2: float, lng2: float) -> float:
+    """兩點球面距離（公尺）。"""
+    r = 6_371_000.0
+    p1, p2 = math.radians(lat1), math.radians(lat2)
+    dp = math.radians(lat2 - lat1)
+    dl = math.radians(lng2 - lng1)
+    a = math.sin(dp / 2) ** 2 + math.cos(p1) * math.cos(p2) * math.sin(dl / 2) ** 2
+    return 2 * r * math.asin(math.sqrt(a))
+
+
+def upsert_traffic_accidents(
+    conn: sqlite3.Connection, rows: list[dict], source: str, as_of: str, ingested_at: str,
+) -> int:
+    """落地事故點位（INSERT OR IGNORE 去重）。DI-5：點位僅供聚合，tool 不回個別點。"""
+    before = conn.total_changes
+    conn.executemany(
+        "INSERT OR IGNORE INTO traffic_accidents "
+        "(lat, lng, severity, occurred_at, source, as_of, ingested_at) "
+        "VALUES (:lat, :lng, :severity, :occurred_at, :source, :as_of, :ingested_at)",
+        [
+            {"lat": r["lat"], "lng": r["lng"], "severity": r["severity"],
+             "occurred_at": r["occurred_at"], "source": source, "as_of": as_of,
+             "ingested_at": ingested_at}
+            for r in rows
+        ],
+    )
+    added = conn.total_changes - before
+    record_provenance(conn, "traffic_accident", as_of, source, "gov", 1.0, as_of, ingested_at)
+    conn.commit()
+    return added
+
+
+def query_accident_points_near(
+    conn: sqlite3.Connection, lat: float, lng: float, radius_m: float,
+) -> list[dict]:
+    """半徑內事故點（bbox 粗篩 + haversine 精篩）。**內部用**：呼叫端須聚合後輸出（DI-5）。"""
+    # bbox 須為超集（不可誤刪邊緣點）：經度每度隨緯度縮短，故 lng delta 用 cos(lat) 放寬。
+    deg_lat = radius_m / 111_320.0
+    deg_lng = radius_m / (111_320.0 * max(math.cos(math.radians(lat)), 1e-6))
+    cur = conn.execute(
+        "SELECT lat, lng, severity, occurred_at FROM traffic_accidents "
+        "WHERE lat BETWEEN ? AND ? AND lng BETWEEN ? AND ?",
+        (lat - deg_lat, lat + deg_lat, lng - deg_lng, lng + deg_lng),
+    )
+    out: list[dict] = []
+    for r in cur.fetchall():
+        if _haversine_m(lat, lng, r["lat"], r["lng"]) <= radius_m:
+            out.append(dict(r))
+    return out
