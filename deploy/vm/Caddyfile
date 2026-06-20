@@ -1,0 +1,4 @@
+# LINE webhook 入向 TLS（自動憑證）→ fastapi-edge。網域由 .env 的 WEBHOOK_DOMAIN 帶入。
+{$WEBHOOK_DOMAIN} {
+	reverse_proxy fastapi-edge:8080
+}

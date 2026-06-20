@@ -3,7 +3,7 @@
 
 resource "google_redis_instance" "redis" {
   name           = "${var.cluster_name}-${var.env}-redis"
-  tier           = "STANDARD_HA"
+  tier           = var.redis_tier # STANDARD_HA(prod) / BASIC(MVP)
   memory_size_gb = 1
   region         = var.region
 

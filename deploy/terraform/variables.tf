@@ -55,6 +55,39 @@ variable "cloudsql_tier" {
   default     = "db-custom-2-7680"
 }
 
+# 成本旋鈕（prod 預設高可用；MVP 以 mvp.tfvars 降規省錢）。
+variable "cloudsql_availability_type" {
+  description = "Cloud SQL 可用性：REGIONAL(HA, prod) / ZONAL(單區, MVP 省錢)。"
+  type        = string
+  default     = "REGIONAL"
+  validation {
+    condition     = contains(["REGIONAL", "ZONAL"], var.cloudsql_availability_type)
+    error_message = "僅允許 REGIONAL 或 ZONAL。"
+  }
+}
+
+variable "cloudsql_disk_size" {
+  description = "Cloud SQL 磁碟 GB（最小 10）。"
+  type        = number
+  default     = 20
+}
+
+variable "cloudsql_pitr" {
+  description = "Cloud SQL Point-In-Time Recovery（WAL 歸檔；MVP 可關省儲存）。"
+  type        = bool
+  default     = true
+}
+
+variable "redis_tier" {
+  description = "Memorystore 層級：STANDARD_HA(跨區複本, prod) / BASIC(單節點, MVP 省錢)。"
+  type        = string
+  default     = "STANDARD_HA"
+  validation {
+    condition     = contains(["STANDARD_HA", "BASIC"], var.redis_tier)
+    error_message = "僅允許 STANDARD_HA 或 BASIC。"
+  }
+}
+
 # 共用標籤（GCP resource labels；值須符合 GCP 規則：小寫/數字/dash/underscore）。
 locals {
   common_labels = {

@@ -11,14 +11,14 @@ resource "google_sql_database_instance" "pg" {
 
   settings {
     tier              = var.cloudsql_tier
-    availability_type = "REGIONAL" # regional HA（自動 failover）
+    availability_type = var.cloudsql_availability_type # REGIONAL=HA / ZONAL=MVP
     disk_type         = "PD_SSD"
-    disk_size         = 20
+    disk_size         = var.cloudsql_disk_size
     disk_autoresize   = true
 
     backup_configuration {
       enabled                        = true
-      point_in_time_recovery_enabled = true # PITR（WAL 歸檔）
+      point_in_time_recovery_enabled = var.cloudsql_pitr # PITR（WAL 歸檔）
       start_time                     = "18:00"
       transaction_log_retention_days = 7
       backup_retention_settings {
