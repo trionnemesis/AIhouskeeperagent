@@ -1,0 +1,38 @@
+change_id: "CR:2026:005"
+intent: 部署硬化 — plvr TLS 安全修正 / ETL 排程+新鮮度 / ingest 落地 erd 快取 + mcp.run()
+
+added:
+  - "DEPLOY:TLS:context"      # build_secure_ssl_context（純，僅清 X509_STRICT）
+  - "DEPLOY:SCHED:next"       # next_publication_date（純，1/11/21）
+  - "DEPLOY:SCHED:fresh"      # is_stale（純，DI-9 監控）
+  - "DEPLOY:SCHED:season"     # season_for（純，民國年S季）
+  - "DEPLOY:STORE:schema"     # datastore.init_schema（erd.dbml SQLite 子集）
+  - "DEPLOY:STORE:lvr"        # upsert/query lvr_trades（去重+provenance）
+  - "DEPLOY:STORE:crime"      # upsert/query crime_area_stats（DI-5 無座標欄）
+  - "DEPLOY:STORE:prov"       # record/query provenance（DI-7）
+  - "DEPLOY:RUN:etl"          # scripts/etl_run.py（I/O 邊界：組合純核心）
+  - "DEPLOY:RUN:serve"        # scripts/serve.py（mcp.run() 入口）
+
+modified:
+  - "ETL:lvr:ingest"          # live_fetch_plvr 改走 build_secure_ssl_context
+  - "MCP:lvr:server"          # query_market_tool 改 cache-backed(district)
+  - "MCP:pubsafe:server"      # area_crime_stats_tool 改 cache-backed(scope) + 補 mcp.run()
+  - "GATE:DEPLOY:smoke"       # deploy_smoke 改 seed 快取→cache-backed 呼叫
+
+removed: []
+
+affected:
+  domain_invariants:
+    - "Inv-5"   # 無快取/不足→refused
+    - "DI-5"    # crime schema 無座標欄；門牌 scope→refused
+    - "DI-7"    # provenance 落地
+    - "DI-9"    # 短 TTL 重抓校正（排程+新鮮度）
+    - "DI-2"    # 顯名隨快取保留
+  security:
+    - "TLS-1"   # 驗證不可關（CERT_REQUIRED + check_hostname 恆真）
+  patterns: ["DI"]   # ssl context / fetcher / time / db 連線注入
+  sources:
+    - "plvr.land.moi.gov.tw/DownloadSeason（政府資料開放授權第1版）"
+
+breaking_change: true   # tool 簽名變更：query_market_tool(rows→district)、area_crime_stats_tool(去 stats 參數)
+migration: "呼叫端改傳 district/scope；資料由 etl_run.py 預先落地至 DATA_MCP_DB。"
