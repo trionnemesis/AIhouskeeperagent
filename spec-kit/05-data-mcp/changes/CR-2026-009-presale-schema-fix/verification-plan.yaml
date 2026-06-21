@@ -1,0 +1,27 @@
+change_id: "CR:2026:009"
+quality_profile:
+  id: "QP:ETL:BATCH"
+  note: "背景批次；重正確性與冪等。錯價零容忍。"
+gate_vdd:
+  binds_to: "GATE:VDD"
+  trigger: { when: "post-Green AND pre-Deploy" }
+  preconditions: [functional_tests_passing, red_evidence_present]
+  assertions:
+    correctness:
+      - check: sale_schema_header_resolved     # 成屋 33 欄以表頭定位仍正確（無回歸）
+      - check: presale_schema_header_resolved   # 預售 31 欄面積/總價/單價/車位欄對齊
+      - check: presale_not_fixed_index_contaminated  # 反證舊 col15/21/25 污染值不再出現
+      - check: building_type_by_filename        # _b→預售、_a→成屋；不靠交易標的字串
+      - check: presale_deal_target_no_keyword   # 預售檔交易標的不含「預售」
+      - check: di_injection                     # fetcher 注入；ingest 標註 building_type
+    real_run:
+      - check: live_reingest_presale_smoke      # 重新灌 a_lvr_land_b.csv → 無極端單價（松山區）
+    mutation:
+      - metric: mutation_score
+        condition: ">= M_threshold"
+  oracle:
+    correctness: "unit asserts（雙 schema sample CSV：33/31 欄真實中文表頭）"
+    real_run: "live download a_lvr_land_b.csv → ingest → 比對單價分布無異常極端值"
+    mutation: "manual cp+diff（building_type 恆成屋 / 面積固定 col15 / 總價固定 col21 / 表頭鍵錯置 → 皆被殺）(+清 __pycache__)"
+  on_fail: { policy: "reject | repair", forbidden: implementer_agent_lowers_threshold }
+  final_authority: production_telemetry
