@@ -1,0 +1,24 @@
+change_id: "CR:2026:009"
+intent: 修預售屋欄位錯位 + 建物類型誤判（資料正確性）
+
+added:
+  - "ETL:lvr:header-resolve"   # _build_col_index/_norm_header（表頭動態定位）
+  - "ETL:lvr:building-type"    # building_type_for(filename)（檔名判別預售/成屋）
+
+modified:
+  - "ETL:lvr:parse"            # parse_lvr_csv：固定索引 → 中文表頭動態定位
+  - "ETL:lvr:ingest"           # ingest_lvr：依檔名標註 building_type
+  - "scripts/etl_run._to_erd_row"  # building_type 改讀 ingest 標註，不用交易標的字串
+
+removed: []
+
+affected:
+  domain_invariants:
+    - "Inv-5"   # 表頭無法辨識→回空（拒污染優於猜測）
+    - "Inv-6"   # 預售/成屋標註正確（標註義務）
+    - "DI-2"    # 顯名不變
+  patterns: ["DI"]            # fetcher 注入不變；building_type 於來源層標註
+  sources:
+    - "plvr.land.moi.gov.tw（a_lvr_land_a.csv 33 欄 / a_lvr_land_b.csv 31 欄，115S1 實測）"
+
+breaking_change: false   # parse_lvr_csv 輸出鍵不變；ingest_lvr 多帶 building_type（新增鍵，向後相容）

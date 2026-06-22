@@ -38,7 +38,9 @@ def _to_erd_row(r: dict) -> dict:
     return {
         "district": r["district"],
         "deal_type": "rent" if "租" in r.get("deal_target", "") else "sale",
-        "building_type": "預售" if "預售" in r.get("deal_target", "") else "成屋",
+        # building_type 由 ingest 依來源檔名標註（_b=預售/_a=成屋）；交易標的永不含「預售」，
+        # 不可由其判別（CR-2026-009 Bug 1）。缺漏時保守視為成屋。
+        "building_type": r.get("building_type", "成屋"),
         "trade_date": r["trade_date"],
         "total_price": r["total_price"],
         "unit_price_net": net,
