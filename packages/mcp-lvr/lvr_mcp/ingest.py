@@ -13,12 +13,15 @@ plvr 兩檔欄位**佈局不同**（逐欄核對 115S1）：
 """
 import csv
 import io
+import logging
 import re
 import zipfile
 from datetime import date
 from typing import Callable
 
 from govnet.tls import build_secure_ssl_context, with_retry
+
+_LOG = logging.getLogger(__name__)
 
 # 中文表頭 → 欄位語意（正規化後 exact match）。容忍「平方公尺/㎡」與括號/斜線差異。
 _HEADER_FIELD = {
@@ -123,8 +126,16 @@ def ingest_lvr(fetcher: Callable[[str], bytes], season: str, counties: list[str]
             if name not in names:
                 continue
             text = z.read(name).decode("utf-8-sig")
+            parsed = parse_lvr_csv(text)
+            if not parsed:
+                # 檔在 ZIP 內卻 0 筆 → 多半是表頭改名/單位記法變動（schema 漂移）使
+                # _build_col_index 找不到必填欄，或確為空檔。不可靜默吞掉（否則
+                # 既有成屋檔 ingest 會無聲歸零），出聲讓部署日誌/CI 可偵測。
+                _LOG.warning(
+                    "plvr 檔 %s 解析 0 筆：疑表頭漂移（欄位改名/單位記法變動）或空檔，"
+                    "請核對 plvr schema 與 _HEADER_FIELD 對應。", name)
             btype = building_type_for(name)
-            for row in parse_lvr_csv(text):
+            for row in parsed:
                 row["building_type"] = btype
                 rows.append(row)
     return rows

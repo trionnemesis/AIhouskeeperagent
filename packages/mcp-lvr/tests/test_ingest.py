@@ -181,5 +181,42 @@ class TestIngestDI(unittest.TestCase):
         self.assertTrue(all(r["building_type"] == "成屋" for r in rows))
 
 
+class TestHeaderDrift(unittest.TestCase):
+    """表頭以名稱定位後，成屋檔 ingest 即依賴表頭字串 → 須(a)容忍真實單位記法、
+    (b)無法辨識時安全回空且**出聲**（不靜默歸零，避免既有成屋路徑無聲回歸）。"""
+
+    def test_unit_notation_variants_resolve(self):
+        # plvr 實檔單位曾以「㎡」符號（見舊 docstring）及括號/斜線記法出現
+        header = list(A_HEADER)
+        header[15] = "建物移轉總面積(㎡)"   # 括號 + ㎡
+        header[22] = "單價元/㎡"            # 斜線 + ㎡
+        rec = {
+            "鄉鎮市區": "中山區", "交易標的": "房地(土地+建物)", "交易年月日": "1150620",
+            "建物移轉總面積(㎡)": "120.0", "總價元": "24000000",
+            "單價元/㎡": "200000", "車位總價元": "0",
+        }
+        rows = parse_lvr_csv(_build_csv(header, [rec]))
+        self.assertEqual(len(rows), 1)
+        self.assertEqual(rows[0]["area_sqm"], 120.0)
+        self.assertEqual(rows[0]["total_price"], 24000000)
+        self.assertEqual(rows[0]["unit_price_sqm"], 200000)
+
+    def test_unrecognized_header_returns_empty(self):
+        bogus = "\n".join(["欄A,欄B,欄C", "a,b,c", "1,2,3"])
+        self.assertEqual(parse_lvr_csv(bogus), [])
+
+    def test_ingest_warns_when_present_file_yields_zero(self):
+        # 檔在 ZIP 內但表頭無法辨識 → 0 筆 → 必須 WARNING（部署日誌/CI 可偵測漂移）
+        bogus_csv = "\n".join(["欄A,欄B", "a,b", "1,2"])
+        buf = io.BytesIO()
+        with zipfile.ZipFile(buf, "w") as z:
+            z.writestr("a_lvr_land_a.csv", bogus_csv)
+        zbytes = buf.getvalue()
+        with self.assertLogs("lvr_mcp.ingest", level="WARNING") as cm:
+            rows = ingest_lvr(lambda _s: zbytes, "115S1", ["a_lvr_land_a.csv"])
+        self.assertEqual(rows, [])
+        self.assertTrue(any("a_lvr_land_a.csv" in line for line in cm.output))
+
+
 if __name__ == "__main__":
     unittest.main()

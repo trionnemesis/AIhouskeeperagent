@@ -14,6 +14,8 @@ gate_vdd:
       - check: building_type_by_filename        # _b→預售、_a→成屋；不靠交易標的字串
       - check: presale_deal_target_no_keyword   # 預售檔交易標的不含「預售」
       - check: di_injection                     # fetcher 注入；ingest 標註 building_type
+      - check: unit_notation_variants_resolved   # 表頭 ㎡/括號/斜線變體仍能定位（_norm_header 容忍）
+      - check: header_drift_observable           # 檔在 ZIP 內卻 0 筆 → logging.warning（不靜默歸零）
     real_run:
       - check: live_reingest_presale_smoke      # 重新灌 a_lvr_land_b.csv → 無極端單價（松山區）
     mutation:
