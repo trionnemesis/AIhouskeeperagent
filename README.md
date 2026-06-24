@@ -29,7 +29,7 @@ LINE / Web / Admin → FastAPI Edge → AI Gateway（Policy/PII/Router/ToolAuthZ
 | 路徑 | 內容 |
 |---|---|
 | [`spec-kit/`](spec-kit/) | DDD 事件風暴 / spec / BDD / roadmap / 資料 MCP / **GKE 平台規格** |
-| [`packages/`](packages/) | Python：`govnet`（TLS/retry）、`datastore`（SQLite+Postgres）、`mcp-lvr`、`mcp-public-safety` |
+| [`packages/`](packages/) | Python：`govnet`（TLS/retry）、`datastore`（SQLite+Postgres）、`mcp-lvr`（plvr 實價登錄 ingest，成屋(33欄)/預售(31欄)雙 schema **以中文表頭動態定位**欄位）、`mcp-public-safety` |
 | [`shared/`](shared/) | TypeScript：`tw-utils`（台灣 deterministic 工具）、`scope-helper`（租戶 scope 注入） |
 | [`deploy/`](deploy/) | **VM**（compose + Dockerfile，MVP）、**GKE**（Terraform + Kustomize + conftest，scale）、`verify.sh` |
 | [`scripts/`](scripts/) | `serve.py`（MCP server 入口，streamable-http）、`etl_run.py`、`deploy_smoke.py` |
