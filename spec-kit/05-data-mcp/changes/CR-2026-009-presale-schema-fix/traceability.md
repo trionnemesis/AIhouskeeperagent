@@ -22,4 +22,3 @@ ETL:lvr:building-type（檔名判別預售/成屋）
 |---|---|---|---|
 | 1 預售恆標成屋 | `"預售" in deal_target` 恆 False（交易標的無此字串） | `building_type_for(filename)` 依 `_b/_a` 判別 | `TestBuildingType` 在舊碼 ImportError→修後綠 |
 | 2 固定索引錯位 | col15/21/22/25 為成屋 33 欄校準，套 31 欄預售檔錯位 | 中文表頭動態定位 `_build_col_index` | `TestParsePresale` 舊碼讀到 2.0/2000000/0→修後 50.0/3e7/2e6 |
-```
