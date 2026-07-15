@@ -92,7 +92,7 @@ The implementation is deliberately layered:
 | --- | --- |
 | packages/govnet | TLS verification and bounded retry helpers for official-data fetchers. |
 | packages/datastore | SQLite/Postgres persistence, idempotent writes, provenance, and spatial query guards. |
-| packages/mcp-lvr | Taiwan transaction-data ingestion/query path with ROC-date parsing, freshness checks, and refusal when evidence is insufficient. |
+| packages/mcp-lvr | Taiwan transaction-data ingestion/query path with ROC-date parsing, freshness checks, refusal when evidence is insufficient, and dynamic Chinese-header matching for existing-home (33-column) and pre-sale (31-column) schemas. |
 | packages/mcp-public-safety | Accident and crime aggregation with DI-5 coarse-grained, coordinate-aware output guards. |
 | shared/tw-utils | Deterministic Taiwan utilities: business IDs, ROC dates, postal codes, addresses, metro data, and ETL transforms. |
 | shared/scope-helper | Tenant-scope injection and protection against cross-tenant overrides. |

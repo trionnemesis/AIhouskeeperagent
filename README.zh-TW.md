@@ -92,7 +92,7 @@ flowchart LR
 | --- | --- |
 | packages/govnet | 官方資料 fetcher 的 TLS 驗證與有界 retry helpers。 |
 | packages/datastore | SQLite／Postgres persistence、冪等寫入、provenance 與空間查詢防護。 |
-| packages/mcp-lvr | 台灣實價資料 ingestion／query，包含民國日期解析、freshness checks 與證據不足時拒答。 |
+| packages/mcp-lvr | 台灣實價資料 ingestion／query，包含民國日期解析、freshness checks、證據不足時拒答，以及以中文表頭動態定位成屋 33 欄／預售 31 欄雙 schema。 |
 | packages/mcp-public-safety | 事故與犯罪聚合，包含 DI-5 粗粒度與座標感知輸出防護。 |
 | shared/tw-utils | 統編、民國日期、郵遞區號、地址、捷運資料與 ETL transforms 等 deterministic 台灣工具。 |
 | shared/scope-helper | 租戶 scope 注入與防止跨租戶覆寫。 |
