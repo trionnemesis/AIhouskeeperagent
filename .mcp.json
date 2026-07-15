@@ -1,0 +1,28 @@
+{
+  "mcpServers": {
+    "hermes-lvr": {
+      "type": "stdio",
+      "command": "/Users/warden/AIhouskeeperagent/.venv/bin/python",
+      "args": [
+        "/Users/warden/AIhouskeeperagent/scripts/serve.py",
+        "lvr"
+      ],
+      "env": {
+        "MCP_TRANSPORT": "stdio",
+        "DATA_MCP_DB": "/Users/warden/AIhouskeeperagent/var/data_mcp.db"
+      }
+    },
+    "hermes-public-safety": {
+      "type": "stdio",
+      "command": "/Users/warden/AIhouskeeperagent/.venv/bin/python",
+      "args": [
+        "/Users/warden/AIhouskeeperagent/scripts/serve.py",
+        "public-safety"
+      ],
+      "env": {
+        "MCP_TRANSPORT": "stdio",
+        "DATA_MCP_DB": "/Users/warden/AIhouskeeperagent/var/data_mcp.db"
+      }
+    }
+  }
+}
