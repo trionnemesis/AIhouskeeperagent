@@ -26,6 +26,7 @@
 - [目前狀態](#目前狀態)
 - [Repository 結構](#repository-結構)
 - [研究與規格](#研究與規格)
+- [相關專案](#相關專案)
 - [常見問題](#常見問題)
 
 ## 為什麼做
@@ -254,6 +255,14 @@ Production 不會因為 manifests 能 render 就自動算「已完成」。真�
 - [spec-kit/05-data-mcp/](./spec-kit/05-data-mcp/) — data-source decision matrix、MCP boundaries、compliance layer 與 open questions。
 - [spec-kit/06-platform-gke/](./spec-kit/06-platform-gke/) — VM MVP 與 GKE scale path。
 - [TEST-REPORT.md](./TEST-REPORT.md) — 驗證紀錄，不是 marketing claim。
+
+## 相關專案
+
+AI Housekeeper Agent 是同一作者的台灣 open data／MCP 專案之一。這些是各自獨立的 codebase，沒有共用 runtime 或部署相依性，但延續類似的來源與 provenance 紀律：
+
+- **[g0VMCP](https://github.com/trionnemesis/g0VMCP)** — 台灣政府電子採購網（PCC）open data 的獨立 MCP server。
+- **[healthcare-opendata-mcp](https://github.com/trionnemesis/healthcare-opendata-mcp)** — 台灣健保署 open data 的獨立 MCP server，採用與本專案 data MCP（`packages/mcp-lvr`、`packages/mcp-public-safety`）相同的 query／provenance 模式。
+- **[AI-NativeSTDD-VDD](https://github.com/trionnemesis/AI-NativeSTDD-VDD)** — 本專案 test-first 的 STDD×VDD gate（RED → GREEN，驗證後才算完成）概念來源的治理系統。
 
 ## 常見問題
 

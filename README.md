@@ -26,6 +26,7 @@ The project thesis is not “put an LLM on top of property data.” The durable 
 - [Current status](#current-status)
 - [Repository map](#repository-map)
 - [Research and specification](#research-and-specification)
+- [Related projects](#related-projects)
 - [FAQ](#faq)
 
 ## Why
@@ -254,6 +255,14 @@ The honest status vocabulary is:
 - [spec-kit/05-data-mcp/](./spec-kit/05-data-mcp/) — data-source decision matrix, MCP boundaries, compliance layer, and open questions.
 - [spec-kit/06-platform-gke/](./spec-kit/06-platform-gke/) — VM MVP and GKE scale path.
 - [TEST-REPORT.md](./TEST-REPORT.md) — verification record rather than a marketing claim.
+
+## Related projects
+
+AI Housekeeper Agent is one of a small set of Taiwan open-data / MCP projects from the same author. They are independent codebases — no shared runtime or deploy dependency — but follow a similar source-and-provenance discipline:
+
+- **[g0VMCP](https://github.com/trionnemesis/g0VMCP)** — an independent MCP server over Taiwan government e-procurement (PCC) open data.
+- **[healthcare-opendata-mcp](https://github.com/trionnemesis/healthcare-opendata-mcp)** — an independent MCP server over Taiwan National Health Insurance (NHI) open data, using the same query/provenance pattern as this repository's data MCPs (`packages/mcp-lvr`, `packages/mcp-public-safety`).
+- **[AI-NativeSTDD-VDD](https://github.com/trionnemesis/AI-NativeSTDD-VDD)** — the governance system this repository's test-first STDD×VDD gate (RED → GREEN, verification required before work counts as done) is derived from.
 
 ## FAQ
 
