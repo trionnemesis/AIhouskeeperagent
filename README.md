@@ -13,6 +13,8 @@ The project thesis is not “put an LLM on top of property data.” The durable 
 
 [繁體中文說明](./README.zh-TW.md) · [Test and deployment report](./TEST-REPORT.md) · [Spec Kit](./spec-kit/README.md) · [CI](https://github.com/trionnemesis/AIhouskeeperagent/actions)
 
+<!-- TODO: demo GIF pending -->
+
 ## Contents
 
 - [Why](#why)

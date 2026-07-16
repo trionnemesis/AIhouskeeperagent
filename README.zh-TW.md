@@ -13,6 +13,8 @@
 
 [English README](./README.md) · [測試與部署報告](./TEST-REPORT.md) · [Spec Kit](./spec-kit/README.md) · [CI](https://github.com/trionnemesis/AIhouskeeperagent/actions)
 
+<!-- TODO: demo GIF pending -->
+
 ## 目錄
 
 - [為什麼做](#為什麼做)
